@@ -1,8 +1,10 @@
 package main
 
 import (
+	"container/list"
 	"fmt"
 	flv "github.com/zhangpeihao/goflv"
+	"go-mpu/container/rtp"
 	"net"
 	"os"
 	//"go-mpu/container/flv"
@@ -55,9 +57,15 @@ func receiveRtp() {
 	}()
 
 	var flv_tag []byte
+	FlvTagList := list.New()
+	rtpQueue := newQueue(10)
+
 	pos := 0
 	var last_ts uint32
 	last_ts = uint32(0)
+
+	//RtpList := list.New()
+
 	tmpBuf := make([]byte, 4) //读元信息用
 	for {
 		buff := make([]byte, 2*1024)
@@ -73,11 +81,27 @@ func receiveRtp() {
 		if rp == nil {
 			continue
 		}
-		//flvFile.WriteAudioTag(rtpPack.Payload, uint32(0))
+		//Rtp顺序存放到队列中
+		rtpQueue.Enqueue(rp)
+		//if rtpQueue.queue.Size()%5 == 0 {
+		//	rtpQueue.print()
+		//}
+		if rtpQueue.queue.Size() < 20 { //刚开始先缓存一定量
+			continue
+		} else if rtpQueue.queue.Size() == 20 {
+			rtpQueue.Check()
+			continue
+		}
+		//到达一定量后就从队列中取rtp了
+		rp = rtpQueue.Dequeue().(*rtp.RtpPack)
 		payload := rp.Payload
 		marker := rp.Marker
 		new_ts := rp.Timestamp
-		fmt.Println("-----------------")
+
+		fmt.Println("-----------------", rp.SequenceNumber, "-----------------")
+		if int(rp.SequenceNumber)%100 == 0 {
+			rtpQueue.print()
+		}
 
 		if marker == byte(0) { //该帧未结束
 			if new_ts > last_ts { //该帧是初始帧
@@ -101,10 +125,16 @@ func receiveRtp() {
 				//fmt.Println(len(payload))
 				copy(flv_tag[pos:pos+len(payload)], payload)
 			}
-			if flv_tag[0] == byte(9) {
-				fmt.Println(flv_tag)
+			//if flv_tag[0] == byte(9) {
+			//	fmt.Println(flv_tag)
+			//}
+			//得到一个flv tag
+
+			//丢包
+			if new_ts%1 == 0 {
+				FlvTagList.PushBack(flv_tag)
+				flvFile.WriteTagDirect(flv_tag)
 			}
-			flvFile.WriteTagDirect(flv_tag)
 			//fmt.Println(flv_tag)
 			fmt.Println("rtp seq:", rp.SequenceNumber, ",payload size: ", len(flv_tag), ",rtp timestamp: ", rp.Timestamp)
 
