@@ -1,0 +1,39 @@
+package flv
+
+type TagPackType byte
+
+const (
+	// === AMF Type ===
+	AMF_DATA_TYPE_NUMBER      = 0x00
+	AMF_DATA_TYPE_BOOL        = 0x01
+	AMF_DATA_TYPE_STRING      = 0x02
+	AMF_DATA_TYPE_OBJECT      = 0x03
+	AMF_DATA_TYPE_NULL        = 0x05
+	AMF_DATA_TYPE_UNDEFINED   = 0x06
+	AMF_DATA_TYPE_REFERENCE   = 0x07
+	AMF_DATA_TYPE_MIXEDARRAY  = 0x08
+	AMF_DATA_TYPE_OBJECT_END  = 0x09
+	AMF_DATA_TYPE_ARRAY       = 0x0a
+	AMF_DATA_TYPE_DATE        = 0x0b
+	AMF_DATA_TYPE_LONG_STRING = 0x0c
+	AMF_DATA_TYPE_UNSUPPORTED = 0x0d
+
+	AMF_VIDEO_ECMA_ARRAY_LENGTH = 7
+	AMF_AUDIO_ECMA_ARRAY_LENGTH = 8
+	AMF_END_OF_OBJECT           = 0x09
+
+	// === Flv 类型 ===
+	FLV_TYPE_VIDEO       = 0x1 // 视频
+	FLV_TYPE_AUDIO       = 0x4 // 音频
+	FLV_TYPE_AUDIO_VIDEO = 0x5 // 音频 + 视频
+
+	FLV_CODECID_H264 = 7
+
+	// === Tag Type ===
+	TAG_TYPE_AUDIO  TagPackType = 0x08
+	TAG_TYPE_VIDEO  TagPackType = 0x09
+	TAG_TYPE_SCRIPT TagPackType = 0x12
+
+	// === Tag 头部 长度
+	TAG_HEADER_LENGTH = 11
+)

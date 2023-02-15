@@ -1,10 +1,8 @@
 package main
 
 import (
-	"container/list"
 	"fmt"
 	flv "github.com/zhangpeihao/goflv"
-	"go-mpu/container/rtp"
 	"net"
 	"os"
 	//"go-mpu/container/flv"
@@ -57,7 +55,8 @@ func receiveRtp() {
 	}()
 
 	var flv_tag []byte
-	FlvTagList := list.New()
+	//FlvTagList := list.New()
+	Http_flvServer := startHTTPFlv()
 	rtpQueue := newQueue(10)
 
 	pos := 0
@@ -67,6 +66,7 @@ func receiveRtp() {
 	//RtpList := list.New()
 
 	tmpBuf := make([]byte, 4) //读元信息用
+	debug := false            //是否打印信息
 	for {
 		buff := make([]byte, 2*1024)
 		num, err := conn.Read(buff)
@@ -86,19 +86,23 @@ func receiveRtp() {
 		//if rtpQueue.queue.Size()%5 == 0 {
 		//	rtpQueue.print()
 		//}
-		if rtpQueue.queue.Size() < 20 { //刚开始先缓存一定量
+		if rtpQueue.queue.Size() < 2*rtpQueue.PaddingWindowSize { //刚开始先缓存一定量
 			continue
-		} else if rtpQueue.queue.Size() == 20 {
+		} else if !rtpQueue.checked {
+			fmt.Println("rtp队列进行check")
 			rtpQueue.Check()
 			continue
 		}
 		//到达一定量后就从队列中取rtp了
-		rp = rtpQueue.Dequeue().(*rtp.RtpPack)
+		rp = rtpQueue.Dequeue() //阻塞
+
 		payload := rp.Payload
 		marker := rp.Marker
 		new_ts := rp.Timestamp
 
-		fmt.Println("-----------------", rp.SequenceNumber, "-----------------")
+		if debug {
+			fmt.Println("-----------------", rp.SequenceNumber, "-----------------")
+		}
 		if int(rp.SequenceNumber)%100 == 0 {
 			rtpQueue.print()
 		}
@@ -108,7 +112,7 @@ func receiveRtp() {
 				// Read tag size
 				copy(tmpBuf[1:], payload[1:4])
 				TagSize := uint32(tmpBuf[1])<<16 | uint32(tmpBuf[2])<<8 | uint32(tmpBuf[3]) + uint32(11)
-				fmt.Println("新建初始帧长度为", TagSize)
+				//fmt.Println("新建初始帧长度为", TagSize)
 				flv_tag = make([]byte, TagSize)
 
 				copy(flv_tag[pos:pos+len(payload)], payload)
@@ -130,13 +134,14 @@ func receiveRtp() {
 			//}
 			//得到一个flv tag
 
-			//丢包
-			if new_ts%1 == 0 {
-				FlvTagList.PushBack(flv_tag)
-				flvFile.WriteTagDirect(flv_tag)
+			//有客户端就将flv数据发给客户端
+			if Http_flvServer.flvWriter != nil {
+				//FlvTagList.PushBack(flv_tag)
+				Http_flvServer.flvWriter.Write(flv_tag)
 			}
-			//fmt.Println(flv_tag)
-			fmt.Println("rtp seq:", rp.SequenceNumber, ",payload size: ", len(flv_tag), ",rtp timestamp: ", rp.Timestamp)
+			//录制到文件中
+			flvFile.WriteTagDirect(flv_tag)
+			//fmt.Println("rtp seq:", rp.SequenceNumber, ",payload size: ", len(flv_tag), ",rtp timestamp: ", rp.Timestamp)
 
 			flv_tag = nil
 			pos = 0

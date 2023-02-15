@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"github.com/lucas-clemente/quic-go"
 	"go-mpu/container/rtp"
+	"sync"
 )
 
 //var Conn = initQuic()
+var lock sync.Mutex
 
 func initQuic() *conn {
 	tlsConf := &tls.Config{InsecureSkipVerify: true,
@@ -20,30 +22,31 @@ func initQuic() *conn {
 	return conn
 }
 
-func GetByQuic(seq uint16, rtpQueue *queue, Conn *conn) {
+func (q *queue) GetByQuic(seq uint16) {
+	lock.Lock()
+	defer lock.Unlock()
+
+	Conn := q.Conn
 	// run the client
-	go func() {
+	// 根据序列号请求
+	_, err := Conn.WriteSeq(uint16(seq))
 
-		// 根据序列号请求
-		_, err := Conn.WriteSeq(uint16(seq))
-
-		//读rtp数据
-		var pkt *rtp.RtpPack
-		_, err = Conn.ReadRtp(&pkt)
-		if err != nil {
-			fmt.Println(err)
-		}
-		rtpQueue.Enqueue(pkt)
-		//fmt.Printf("buf:\t %v \n", pkt.buffer)
-		//fmt.Printf("ekt:\t %v \n", pkt.ekt)
-		//fmt.Println("buf len:", len(pkt.))
-		fmt.Printf("Seq:\t %v \n", pkt.SequenceNumber)
-		fmt.Printf("SSRC:\t %v \n", pkt.SSRC)
-		//fmt.Printf("TimeStamp:\t %v \n", pkt.GetTimestamp())
-		//fmt.Printf("ExtLen:\t %v \n", pkt.GetHdrExtLen())
-		//fmt.Printf("PTtype:\t %v \n", pkt.GetPT())
-		fmt.Printf("Payload:\t %v \n", pkt.Payload)
-	}()
+	//读rtp数据
+	var pkt *rtp.RtpPack
+	_, err = Conn.ReadRtp(&pkt)
+	if err != nil {
+		fmt.Println(err)
+	}
+	q.Enqueue(pkt)
+	//fmt.Printf("buf:\t %v \n", pkt.buffer)
+	//fmt.Printf("ekt:\t %v \n", pkt.ekt)
+	//fmt.Println("buf len:", len(pkt.))
+	fmt.Printf("quic收到rtp包，Seq:\t %v \n", pkt.SequenceNumber)
+	//fmt.Printf("SSRC:\t %v \n", pkt.SSRC)
+	//fmt.Printf("TimeStamp:\t %v \n", pkt.GetTimestamp())
+	//fmt.Printf("ExtLen:\t %v \n", pkt.GetHdrExtLen())
+	//fmt.Printf("PTtype:\t %v \n", pkt.GetPT())
+	//fmt.Printf("Payload:\t %v \n", pkt.Payload)
 }
 
 //func main() {
