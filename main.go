@@ -2,11 +2,8 @@ package main
 
 import (
 	"fmt"
-	flv "github.com/zhangpeihao/goflv"
-	"net"
-	"os"
-	//"go-mpu/container/flv"
 	"go-mpu/parser"
+	"net"
 )
 
 //var wg sync.WaitGroup
@@ -28,7 +25,6 @@ func receiveRtp() {
 		panic(err)
 	}
 
-	f, err := os.Create("./h264toflv.flv") //创建文件
 	if err != nil {
 		panic(err)
 	}
@@ -43,7 +39,7 @@ func receiveRtp() {
 	// 定时器
 	//t := time.NewTimer(time.Second * 10)
 
-	flvFile, err := flv.CreateFile("./recv.flv")
+	flvFile, err := CreateFile("./recv.flv")
 	if err != nil {
 		fmt.Println("Create FLV dump file error:", err)
 		return
@@ -137,10 +133,16 @@ func receiveRtp() {
 			//有客户端就将flv数据发给客户端
 			if Http_flvServer.flvWriter != nil {
 				//FlvTagList.PushBack(flv_tag)
-				Http_flvServer.flvWriter.Write(flv_tag)
+				err := Http_flvServer.flvWriter.Write(flv_tag)
+				if err != nil {
+					return
+				}
 			}
 			//录制到文件中
-			flvFile.WriteTagDirect(flv_tag)
+			err := flvFile.WriteTagDirect(flv_tag)
+			if err != nil {
+				return
+			}
 			//fmt.Println("rtp seq:", rp.SequenceNumber, ",payload size: ", len(flv_tag), ",rtp timestamp: ", rp.Timestamp)
 
 			flv_tag = nil
@@ -155,6 +157,5 @@ func receiveRtp() {
 
 		//log.Println(rtpPack)
 	}
-	f.Close()
 
 }
