@@ -2,11 +2,19 @@ package main
 
 import (
 	"fmt"
+	"go-mpu/container/rtp"
 	"go-mpu/parser"
 	"net"
 )
 
 //var wg sync.WaitGroup
+
+type FlvRecord struct {
+	HttpServer *Server
+	flv_tag    []byte
+	pos        int
+	last_ts    uint32
+}
 
 func main() {
 
@@ -15,29 +23,19 @@ func main() {
 }
 
 func receiveRtp() {
-	ip := "0.0.0.0:5222"
-	udpAddr, err := net.ResolveUDPAddr("udp", ip)
+	address := "239.0.0.0:5222"
+
+	addr, err := net.ResolveUDPAddr("udp4", address)
 	if err != nil {
 		panic(err)
 	}
-	conn, err := net.ListenUDP("udp", udpAddr)
+
+	// Open up a connection
+	conn, err := net.ListenMulticastUDP("udp4", nil, addr)
+	//conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		panic(err)
 	}
-
-	if err != nil {
-		panic(err)
-	}
-	//w := bufio.NewWriter(f) //创建新的 Writer 对象
-
-	// H264 解析器
-	//h264Parser := h264.NewParser()
-
-	// 时间戳计算
-	//var cts uint32 = 0
-
-	// 定时器
-	//t := time.NewTimer(time.Second * 10)
 
 	flvFile, err := CreateFile("./recv.flv")
 	if err != nil {
@@ -50,38 +48,31 @@ func receiveRtp() {
 		}
 	}()
 
-	var flv_tag []byte
-	//FlvTagList := list.New()
-	Http_flvServer := startHTTPFlv()
 	rtpQueue := newQueue(10)
+	flvRecord := &FlvRecord{
+		startHTTPFlv(), nil, 0, uint32(0),
+	}
 
-	pos := 0
-	var last_ts uint32
-	last_ts = uint32(0)
-
-	//RtpList := list.New()
-
-	tmpBuf := make([]byte, 4) //读元信息用
-	debug := false            //是否打印信息
 	for {
+		//读udp数据
 		buff := make([]byte, 2*1024)
-		num, err := conn.Read(buff)
-
+		//num, err := conn.Read(buff)
+		num, _, err := conn.ReadFromUDP(buff)
 		if err != nil {
 			continue
 		}
 
+		//解析为rtp包
 		data := buff[:num]
 		rtpParser := parser.NewRtpParser()
 		rp := rtpParser.Parse(data)
 		if rp == nil {
 			continue
 		}
-		//Rtp顺序存放到队列中
+
+		//Rtp包顺序存放到队列中
 		rtpQueue.Enqueue(rp)
-		//if rtpQueue.queue.Size()%5 == 0 {
-		//	rtpQueue.print()
-		//}
+
 		if rtpQueue.queue.Size() < 2*rtpQueue.PaddingWindowSize { //刚开始先缓存一定量
 			continue
 		} else if !rtpQueue.checked {
@@ -91,71 +82,72 @@ func receiveRtp() {
 		}
 		//到达一定量后就从队列中取rtp了
 		rp = rtpQueue.Dequeue() //阻塞
-
-		payload := rp.Payload
-		marker := rp.Marker
-		new_ts := rp.Timestamp
-
-		if debug {
-			fmt.Println("-----------------", rp.SequenceNumber, "-----------------")
-		}
-		if int(rp.SequenceNumber)%100 == 0 {
-			rtpQueue.print()
+		err = extractFlv(rp, flvRecord, rtpQueue, flvFile, false)
+		if err != nil {
+			panic(err)
 		}
 
-		if marker == byte(0) { //该帧未结束
-			if new_ts > last_ts { //该帧是初始帧
-				// Read tag size
-				copy(tmpBuf[1:], payload[1:4])
-				TagSize := uint32(tmpBuf[1])<<16 | uint32(tmpBuf[2])<<8 | uint32(tmpBuf[3]) + uint32(11)
-				//fmt.Println("新建初始帧长度为", TagSize)
-				flv_tag = make([]byte, TagSize)
-
-				copy(flv_tag[pos:pos+len(payload)], payload)
-				pos += len(payload)
-			} else { //该帧是中间帧
-				copy(flv_tag[pos:pos+len(payload)], payload)
-				pos += len(payload)
-			}
-		} else { //该帧是结束帧
-			if new_ts > last_ts { //没有之前分片
-				flv_tag = payload
-			} else { //有前面的分片
-				//fmt.Println("pos===", pos)
-				//fmt.Println(len(payload))
-				copy(flv_tag[pos:pos+len(payload)], payload)
-			}
-			//if flv_tag[0] == byte(9) {
-			//	fmt.Println(flv_tag)
-			//}
-			//得到一个flv tag
-
-			//有客户端就将flv数据发给客户端
-			if Http_flvServer.flvWriter != nil {
-				//FlvTagList.PushBack(flv_tag)
-				err := Http_flvServer.flvWriter.Write(flv_tag)
-				if err != nil {
-					return
-				}
-			}
-			//录制到文件中
-			err := flvFile.WriteTagDirect(flv_tag)
-			if err != nil {
-				return
-			}
-			//fmt.Println("rtp seq:", rp.SequenceNumber, ",payload size: ", len(flv_tag), ",rtp timestamp: ", rp.Timestamp)
-
-			flv_tag = nil
-			pos = 0
-
-		}
-		last_ts = new_ts
-
-		//fmt.Println("seq", rp.SequenceNumber, "  size: ", num)
-
-		// 提取 h.264
-
-		//log.Println(rtpPack)
 	}
 
+}
+
+//从rtp包中提取出flv_tag，根据record信息组合分片，debug打印调试信息
+func extractFlv(rp *rtp.RtpPack, record *FlvRecord, rtpQueue *queue, flvFile *File, debug bool) error {
+	payload := rp.Payload
+	marker := rp.Marker
+	new_ts := rp.Timestamp
+
+	tmpBuf := make([]byte, 4)
+	if debug {
+		fmt.Println("-----------------", rp.SequenceNumber, "-----------------")
+	}
+	if int(rp.SequenceNumber)%100 == 0 {
+		rtpQueue.print()
+	}
+
+	if marker == byte(0) { //该帧未结束
+		if new_ts > record.last_ts { //该帧是初始帧
+			// Read tag size
+			copy(tmpBuf[1:], payload[1:4])
+			TagSize := uint32(tmpBuf[1])<<16 | uint32(tmpBuf[2])<<8 | uint32(tmpBuf[3]) + uint32(11)
+			//fmt.Println("新建初始帧长度为", TagSize)
+			record.flv_tag = make([]byte, TagSize)
+
+			copy(record.flv_tag[record.pos:record.pos+len(payload)], payload)
+			record.pos += len(payload)
+		} else { //该帧是中间帧
+			copy(record.flv_tag[record.pos:record.pos+len(payload)], payload)
+			record.pos += len(payload)
+		}
+	} else { //该帧是结束帧
+		if new_ts > record.last_ts { //没有之前分片
+			record.flv_tag = payload
+		} else { //有前面的分片
+			//fmt.Println("pos===", pos)
+			//fmt.Println(len(payload))
+			copy(record.flv_tag[record.pos:record.pos+len(payload)], payload)
+		}
+		//得到一个flv tag
+
+		//有客户端就将flv数据发给客户端
+		if record.HttpServer.flvWriter != nil {
+			//FlvTagList.PushBack(flv_tag)
+			err := record.HttpServer.flvWriter.Write(record.flv_tag)
+			if err != nil {
+				return err
+			}
+		}
+		//录制到文件中
+		err := flvFile.WriteTagDirect(record.flv_tag)
+		if err != nil {
+			return err
+		}
+		//fmt.Println("rtp seq:", rp.SequenceNumber, ",payload size: ", len(flv_tag), ",rtp timestamp: ", rp.Timestamp)
+
+		record.flv_tag = nil
+		record.pos = 0
+
+	}
+	record.last_ts = new_ts
+	return nil
 }
