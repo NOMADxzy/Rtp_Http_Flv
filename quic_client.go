@@ -33,15 +33,21 @@ func (q *queue) GetByQuic(seq uint16) {
 
 	//读rtp数据
 	var pkt *rtp.RtpPack
-	_, err = Conn.ReadRtp(&pkt)
+	err = Conn.ReadRtp(&pkt)
 	if err != nil {
-		fmt.Println(err)
+		//没有该包的缓存
+		fmt.Println("错误，quic无法获取包,序号：", seq)
+		return
 	}
-	q.Enqueue(pkt)
+	if pkt == nil {
+		fmt.Println("错误，quic收到一个空包")
+	} else {
+		q.Enqueue(pkt)
+		fmt.Printf("quic收到rtp包，Seq:\t %v \n", pkt.SequenceNumber)
+	}
 	//fmt.Printf("buf:\t %v \n", pkt.buffer)
 	//fmt.Printf("ekt:\t %v \n", pkt.ekt)
 	//fmt.Println("buf len:", len(pkt.))
-	fmt.Printf("quic收到rtp包，Seq:\t %v \n", pkt.SequenceNumber)
 	//fmt.Printf("SSRC:\t %v \n", pkt.SSRC)
 	//fmt.Printf("TimeStamp:\t %v \n", pkt.GetTimestamp())
 	//fmt.Printf("ExtLen:\t %v \n", pkt.GetHdrExtLen())

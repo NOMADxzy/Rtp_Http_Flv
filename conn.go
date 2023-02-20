@@ -41,38 +41,38 @@ func newConn(sess quic.Session, is_server bool) (*conn, error) {
 //func (c *conn) DataStream() quic.Stream {
 //	return c.dataStream
 //}
-func (c *conn) ReadLen(len *uint16) (int, error) {
+func (c *conn) ReadLen(len *uint16) error {
 	if c.infoStream == nil {
 		var err error
 		c.dataStream, err = c.session.AcceptStream(context.Background())
 		// TODO: check stream id
 		if err != nil {
-			return 0, err
+			return err
 		}
 	}
 	len_b := make([]byte, 2)
 	_, err := c.infoStream.Read(len_b)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	*len = binary.BigEndian.Uint16(len_b)
-	return 0, nil
+	return nil
 	//return io.ReadFull(c.dataStream,b)
 }
-func (c *conn) ReadRtp(pkt **rtp.RtpPack) (int, error) {
+func (c *conn) ReadRtp(pkt **rtp.RtpPack) error {
 	if c.dataStream == nil {
 		var err error
 		c.dataStream, err = c.session.AcceptStream(context.Background())
 		// TODO: check stream id
 		if err != nil {
-			return 0, err
+			return err
 		}
 	}
 	var len uint16
 	//读buffer
-	_, err := c.ReadLen(&len)
+	err := c.ReadLen(&len)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	buf := make([]byte, len)
 	_, err = c.dataStream.Read(buf)
@@ -80,7 +80,7 @@ func (c *conn) ReadRtp(pkt **rtp.RtpPack) (int, error) {
 		panic(err)
 	}
 	*pkt = rtpParser.Parse(buf)
-	return 0, nil
+	return nil
 }
 
 func (c *conn) WriteSeq(seq uint16) (int, error) {

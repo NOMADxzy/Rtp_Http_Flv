@@ -22,11 +22,12 @@ type queue struct {
 	queue             *arraylist.List //rtpPacket队列
 	Conn              *conn           //维持Quic连接
 	checked           bool
-	readChan          chan *rtp.RtpPack
+	readChan          chan interface{}
+	reading           bool
 }
 
 func newQueue(wz int) *queue {
-	return &queue{queue: arraylist.New(), PaddingWindowSize: wz}
+	return &queue{queue: arraylist.New(), PaddingWindowSize: wz, readChan: make(chan interface{}, 1)}
 }
 
 func (q *queue) Enqueue(rp *rtp.RtpPack) {
@@ -38,10 +39,18 @@ func (q *queue) Enqueue(rp *rtp.RtpPack) {
 		q.FirstSeq = seq
 		q.queue.Add(rp)
 	} else {
-		relative := int(seq - q.FirstSeq)
-		if relative < 0 { //过时的包
-			return
-		} else if relative <= q.queue.Size() { //没到队列终点
+		var relative int
+		if q.FirstSeq > seq {
+			if int(q.FirstSeq-seq) > 60000 { //序列号到头
+				relative = 65536 - int(q.FirstSeq) + int(seq)
+			} else { //过时的包
+				fmt.Println("过时的包 ", seq, " ", q.FirstSeq)
+				return
+			}
+		} else {
+			relative = int(seq - q.FirstSeq)
+		}
+		if relative <= q.queue.Size() { //没到队列终点
 			q.queue.Set(relative, rp)
 		} else {
 			for i := q.queue.Size(); i <= relative; i++ {
@@ -57,35 +66,59 @@ func (q *queue) Enqueue(rp *rtp.RtpPack) {
 
 }
 
-func (q *queue) offerPacket() {
+func (q *queue) offerPacket() { //channel方式，多协程读取队列中的包，已弃用
+	q.reading = true
 	for {
-		rp, _ := q.queue.Get(0)
-		if rp != nil {
-			q.readChan <- rp.(*rtp.RtpPack)
+		rp_end, _ := q.queue.Get(q.PaddingWindowSize - 1)
+		if rp_end == nil {
+			continue
+		}
+		rp0, _ := q.queue.Get(0)
+		if q.queue.Size() > q.PaddingWindowSize {
+
+			//fmt.Println(rp0)
+			q.readChan <- rp0
+
+			q.m.Lock()
+			rp, _ := q.queue.Get(q.PaddingWindowSize)
+			if rp == nil {
+				//重传
+				seq := q.FirstSeq + uint16(q.PaddingWindowSize)
+				fmt.Println("序号为", seq, "的包丢失，进行quic重传")
+				go q.GetByQuic(seq)
+				//q.queue.Set(i, pkt)
+			}
+			q.queue.Remove(0)
+			q.FirstSeq += 1
+			q.m.Unlock()
 		}
 	}
 }
 
-func (q *queue) Dequeue() *rtp.RtpPack { //必须确保paddingsize位置处的rtp包已到达才能取包
+func (q *queue) Dequeue() interface{} { //必须确保paddingsize位置处的rtp包已到达才能取包
 	//确保窗口内的包都存在
+	if q.queue.Size() < q.PaddingWindowSize+1 {
+		return nil
+	}
 	rp, _ := q.queue.Get(q.PaddingWindowSize)
 	if rp == nil {
 		//重传
 		seq := q.FirstSeq + uint16(q.PaddingWindowSize)
 		fmt.Println("序号为", seq, "的包丢失，进行quic重传")
-		go q.GetByQuic(seq)
+		q.GetByQuic(seq)
 		//q.queue.Set(i, pkt)
 	}
 
 	var res interface{}
 	for {
 		res, _ = q.queue.Get(0)
-		if res != nil {
+		//if res != nil {
+		if true {
 			q.m.Lock()
 			q.queue.Remove(0)
 			q.FirstSeq += 1
 			q.m.Unlock()
-			return res.(*rtp.RtpPack)
+			return res
 		}
 	}
 }
