@@ -92,7 +92,9 @@ func receiveRtp() {
 				proto_rp := rtpQueue.Dequeue() //阻塞
 				err = extractFlv(proto_rp, flvRecord, rtpQueue, flvFile, false)
 				if err != nil {
-					panic(err)
+					fmt.Println(err)
+					flvRecord.pos = 0
+					flvRecord.flv_tag = nil
 				}
 				if rtpQueue.queue.Size() == rtpQueue.PaddingWindowSize*2 {
 					break
