@@ -1,6 +1,6 @@
 package rtmp
 
-import "go-mpu/protocol/rtmp/core"
+import "rtp_http_flv/protocol/rtmp/core"
 
 const (
 	PUBLISH = "publish"

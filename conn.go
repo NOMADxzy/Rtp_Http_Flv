@@ -3,44 +3,47 @@ package main
 import (
 	"context"
 	"encoding/binary"
-	"github.com/lucas-clemente/quic-go"
-	"go-mpu/container/rtp"
-	"go-mpu/parser"
+	"github.com/quic-go/quic-go"
+	"rtp_http_flv/container/rtp"
+	"rtp_http_flv/parser"
 )
 
 var rtpParser = parser.NewRtpParser()
 
 type conn struct {
-	session    quic.Session
+	session    quic.Connection
 	infoStream quic.Stream
 	dataStream quic.Stream
 }
 
-func newConn(sess quic.Session, is_server bool) (*conn, error) {
-	if is_server {
-		dstream, err := sess.OpenStream()
+func newConn(sess quic.Connection, isServer bool) (*conn, error) {
+	var quicStream quic.Stream
+	var err error
+	if isServer {
+		quicStream, err = sess.OpenStream()
 		if err != nil {
 			return nil, err
 		}
 		return &conn{
 			session:    sess,
-			dataStream: dstream,
+			dataStream: quicStream,
 		}, nil
 	} else {
-		istream, err := sess.OpenStream()
+		quicStream, err := sess.OpenStream()
 		if err != nil {
 			return nil, err
 		}
 		return &conn{
 			session:    sess,
-			infoStream: istream,
+			infoStream: quicStream,
 		}, nil
 	}
 }
 
-//func (c *conn) DataStream() quic.Stream {
-//	return c.dataStream
-//}
+//	func (c *conn) DataStream() quic.Stream {
+//		return c.dataStream
+//	}
+
 func (c *conn) ReadLen(len *uint16) error {
 	if c.infoStream == nil {
 		var err error
@@ -50,15 +53,16 @@ func (c *conn) ReadLen(len *uint16) error {
 			return err
 		}
 	}
-	len_b := make([]byte, 2)
-	_, err := c.infoStream.Read(len_b)
+	lenB := make([]byte, 2)
+	_, err := c.infoStream.Read(lenB)
 	if err != nil {
 		return err
 	}
-	*len = binary.BigEndian.Uint16(len_b)
+	*len = binary.BigEndian.Uint16(lenB)
 	return nil
 	//return io.ReadFull(c.dataStream,b)
 }
+
 func (c *conn) ReadRtp(pkt **rtp.RtpPack) error {
 	if c.dataStream == nil {
 		var err error
@@ -68,13 +72,13 @@ func (c *conn) ReadRtp(pkt **rtp.RtpPack) error {
 			return err
 		}
 	}
-	var len uint16
+	var bufLen uint16
 	//读buffer
-	err := c.ReadLen(&len)
+	err := c.ReadLen(&bufLen)
 	if err != nil {
 		return err
 	}
-	buf := make([]byte, len)
+	buf := make([]byte, bufLen)
 	_, err = c.dataStream.Read(buf)
 	if err != nil {
 		panic(err)
@@ -84,7 +88,7 @@ func (c *conn) ReadRtp(pkt **rtp.RtpPack) error {
 }
 
 func (c *conn) WriteSeq(seq uint16) (int, error) {
-	seq_b := make([]byte, 2)
-	binary.BigEndian.PutUint16(seq_b, seq)
-	return c.infoStream.Write(seq_b)
+	seqB := make([]byte, 2)
+	binary.BigEndian.PutUint16(seqB, seq)
+	return c.infoStream.Write(seqB)
 }

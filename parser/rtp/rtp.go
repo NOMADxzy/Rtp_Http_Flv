@@ -3,7 +3,7 @@ package rtp
 import (
 	"encoding/binary"
 
-	"go-mpu/container/rtp"
+	"rtp_http_flv/container/rtp"
 )
 
 type Parser struct {

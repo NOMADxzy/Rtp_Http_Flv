@@ -3,11 +3,13 @@ package flv
 import (
 	"bytes"
 
-	"go-mpu/utils"
+	"rtp_http_flv/utils"
 )
 
 // ==========================================
-// 				Script Tag Data
+//
+//	Script Tag Data
+//
 // ==========================================
 type MetaPacket struct {
 	Buff bytes.Buffer

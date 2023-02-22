@@ -3,12 +3,12 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/lucas-clemente/quic-go"
-	"go-mpu/container/rtp"
+	"github.com/quic-go/quic-go"
+	"rtp_http_flv/container/rtp"
 	"sync"
 )
 
-//var Conn = initQuic()
+// var Conn = initQuic()
 var lock sync.Mutex
 
 func initQuic() *conn {

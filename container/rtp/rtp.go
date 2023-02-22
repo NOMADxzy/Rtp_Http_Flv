@@ -3,7 +3,7 @@ package rtp
 import (
 	"fmt"
 
-	"go-mpu/parser/ps"
+	"rtp_http_flv/parser/ps"
 )
 
 type RtpPack struct {

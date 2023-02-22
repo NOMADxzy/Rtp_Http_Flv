@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/emirpasic/gods/lists/arraylist"
-	"go-mpu/container/rtp"
+	"rtp_http_flv/container/rtp"
 	"sync"
 )
 
@@ -35,15 +35,15 @@ func (q *queue) Enqueue(rp *rtp.RtpPack) {
 	defer q.m.Unlock()
 
 	seq := rp.SequenceNumber
-	if q.queue.Size() == 0 { //队列中还没有元素
+	if q.queue.Size() == 0 { // 队列中还没有元素
 		q.FirstSeq = seq
 		q.queue.Add(rp)
 	} else {
 		var relative int
 		if q.FirstSeq > seq {
-			if int(q.FirstSeq-seq) > 60000 { //序列号到头
+			if int(q.FirstSeq-seq) > 60000 { // 序列号到头
 				relative = 65536 - int(q.FirstSeq) + int(seq)
-			} else { //过时的包
+			} else { // 过时的包
 				fmt.Println("过时的包 ", seq, " ", q.FirstSeq)
 				return
 			}
@@ -61,16 +61,15 @@ func (q *queue) Enqueue(rp *rtp.RtpPack) {
 				q.queue.Set(i, rp)
 			}
 		}
-
 	}
-
 }
 
-func (q *queue) offerPacket() { //channel方式，多协程读取队列中的包，已弃用
+// channel方式，多协程读取队列中的包，已弃用
+func (q *queue) offerPacket() {
 	q.reading = true
 	for {
-		rp_end, _ := q.queue.Get(q.PaddingWindowSize - 1)
-		if rp_end == nil {
+		rpEnd, _ := q.queue.Get(q.PaddingWindowSize - 1)
+		if rpEnd == nil {
 			continue
 		}
 		rp0, _ := q.queue.Get(0)
@@ -95,18 +94,19 @@ func (q *queue) offerPacket() { //channel方式，多协程读取队列中的包
 	}
 }
 
-func (q *queue) Dequeue() interface{} { //必须确保paddingsize位置处的rtp包已到达才能取包
-	//确保窗口内的包都存在
+// Dequeue 必须确保 paddingsize 位置处的 rtp包已到达才能取包
+func (q *queue) Dequeue() interface{} {
+	// 确保窗口内的包都存在
 	if q.queue.Size() < q.PaddingWindowSize+1 {
 		return nil
 	}
 	rp, _ := q.queue.Get(q.PaddingWindowSize)
 	if rp == nil {
-		//重传
+		// 重传
 		seq := q.FirstSeq + uint16(q.PaddingWindowSize)
 		fmt.Println("序号为", seq, "的包丢失，进行quic重传")
 		q.GetByQuic(seq)
-		//q.queue.Set(i, pkt)
+		// q.queue.Set(i, pkt)
 	}
 
 	var res interface{}
@@ -123,11 +123,12 @@ func (q *queue) Dequeue() interface{} { //必须确保paddingsize位置处的rtp
 	}
 }
 
-func (q *queue) Check() int { //检查窗口内队列Rtp的存在性和有序性
+// Check 检查窗口内队列Rtp的存在性和有序性
+func (q *queue) Check() int {
 	if q.Conn == nil {
 		q.Conn = initQuic()
 	}
-	re_trans := 0
+	reTrans := 0
 	//rtpParser := parser.NewRtpParser()
 	for i := 0; i <= q.PaddingWindowSize; i++ {
 		rp, _ := q.queue.Get(i)
@@ -137,17 +138,18 @@ func (q *queue) Check() int { //检查窗口内队列Rtp的存在性和有序性
 			//q.queue.Set(i, pkt)
 			fmt.Println("序号为", int(q.FirstSeq)+i, "的包丢失，进行quic重传")
 			q.GetByQuic(q.FirstSeq + uint16(i))
-			re_trans += 1
+			reTrans += 1
 		}
 		//if rp.(*rtp.RtpPack).SequenceNumber != q.FirstSeq+uint16(i) {
 		//	fmt.Println("err ！Rtp Queue not sorted, FirstSeq:", q.FirstSeq, ", i:", i, ",SeqNum:", rp.(*rtp.RtpPack).SequenceNumber)
 		//}
 	}
-	if re_trans == 0 {
+	if reTrans == 0 {
 		q.checked = true
 	}
-	return re_trans
+	return reTrans
 }
+
 func (q *queue) print() {
 	fmt.Println("rtp队列长度：", q.queue.Size())
 	fmt.Print("rtp队列：")
@@ -160,5 +162,4 @@ func (q *queue) print() {
 		}
 	}
 	fmt.Println()
-
 }
