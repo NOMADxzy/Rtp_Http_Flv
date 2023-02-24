@@ -2,26 +2,80 @@ package main
 
 import (
 	"fmt"
+	"go-mpu/configure"
 	"go-mpu/container/rtp"
 	"go-mpu/parser"
+	"go-mpu/utils"
 	"net"
+	"strings"
 	"time"
 )
 
-//var wg sync.WaitGroup
+var HttpServer = startHTTPFlv()
+var RtpQueueMap map[uint32]*queue
+var publishers map[uint32]*utils.Publisher
 
 type FlvRecord struct {
-	HttpServer *Server
-	flv_tag    []byte
-	TagSize    int
-	pos        int
-	last_ts    uint32
-	lost_ts    uint32
+	flv_tag []byte
+	TagSize int
+	pos     int
+	last_ts uint32
+	lost_ts uint32
 }
 
 func main() {
 
 	receiveRtp()
+
+}
+
+func handleNewPacket(rp *rtp.RtpPack) {
+	if RtpQueueMap == nil {
+		RtpQueueMap = make(map[uint32]*queue)
+	}
+	rtpQueue := RtpQueueMap[rp.SSRC]
+	if rtpQueue == nil { //新的ssrc流
+
+		//更新流源信息
+		if publishers == nil {
+			publishers = make(map[uint32]*utils.Publisher)
+		}
+		utils.UpdatePublishers(publishers)
+
+		//创建rtp流队列
+		key := publishers[rp.SSRC].Key
+		channel := strings.SplitN(key, "/", 2)[1]
+
+		flvRecord := &FlvRecord{
+			nil, 0, 0, uint32(0), 0,
+		}
+		rtpQueue = newQueue(rp.SSRC, configure.RTP_QUEUE_PADDING_WINDOW_SIZE, flvRecord, utils.CreateFlvFile(channel))
+		RtpQueueMap[rp.SSRC] = rtpQueue
+	}
+
+	//Rtp包顺序存放到队列中
+	rtpQueue.Enqueue(rp)
+
+	if rtpQueue.queue.Size() < 2*rtpQueue.PaddingWindowSize { //刚开始先缓存一定量
+		return
+	} else if !rtpQueue.checked {
+		rtpQueue.Check()
+		return
+	}
+	//到达一定量后就从队列中取rtp了
+	//if !rtpQueue.reading {
+	//	go rtpQueue.offerPacket()
+	//}
+	for {
+		proto_rp := rtpQueue.Dequeue() //阻塞
+		err := extractFlv(proto_rp, rtpQueue.flvRecord, rtpQueue, rtpQueue.flvFile, false)
+		if err != nil {
+			rtpQueue.ResetFlvRecord()
+		}
+		if rtpQueue.queue.Size() <= rtpQueue.PaddingWindowSize*2 {
+			break
+		}
+	}
 
 }
 
@@ -40,21 +94,16 @@ func receiveRtp() {
 		panic(err)
 	}
 
-	flvFile, err := CreateFile("./recv.flv")
-	if err != nil {
-		fmt.Println("Create FLV dump file error:", err)
-		return
-	}
-	defer func() {
-		if flvFile != nil {
-			flvFile.Close()
-		}
-	}()
+	//defer func() {
+	//	if flvFile != nil {
+	//		flvFile.Close()
+	//	}
+	//}()
 
-	rtpQueue := newQueue(10)
-	flvRecord := &FlvRecord{
-		startHTTPFlv(), nil, 0, 0, uint32(0), 0,
-	}
+	//rtpQueue := newQueue(10)
+	//flvRecord := &FlvRecord{
+	//	nil, 0, 0, uint32(0), 0,
+	//}
 
 	go func() { //接受rtp协程
 		for {
@@ -74,32 +123,7 @@ func receiveRtp() {
 				continue
 			}
 
-			//Rtp包顺序存放到队列中
-			rtpQueue.Enqueue(rp)
-
-			if rtpQueue.queue.Size() < 2*rtpQueue.PaddingWindowSize { //刚开始先缓存一定量
-				continue
-			} else if !rtpQueue.checked {
-				fmt.Println("rtp队列进行check")
-				rtpQueue.Check()
-				continue
-			}
-			//到达一定量后就从队列中取rtp了
-			//if !rtpQueue.reading {
-			//	go rtpQueue.offerPacket()
-			//}
-			for {
-				proto_rp := rtpQueue.Dequeue() //阻塞
-				err = extractFlv(proto_rp, flvRecord, rtpQueue, flvFile, false)
-				if err != nil {
-					fmt.Println(err)
-					flvRecord.pos = 0
-					flvRecord.flv_tag = nil
-				}
-				if rtpQueue.queue.Size() == rtpQueue.PaddingWindowSize*2 {
-					break
-				}
-			}
+			handleNewPacket(rp)
 
 		}
 	}()
@@ -119,7 +143,7 @@ func receiveRtp() {
 }
 
 //从rtp包中提取出flv_tag，根据record信息组合分片，debug打印调试信息
-func extractFlv(proto_rp interface{}, record *FlvRecord, rtpQueue *queue, flvFile *File, debug bool) error {
+func extractFlv(proto_rp interface{}, record *FlvRecord, rtpQueue *queue, flvFile *utils.File, debug bool) error {
 	if proto_rp == nil {
 		record.flv_tag = nil
 		record.pos = 0
@@ -149,7 +173,7 @@ func extractFlv(proto_rp interface{}, record *FlvRecord, rtpQueue *queue, flvFil
 			// Read tag size
 			copy(tmpBuf[1:], payload[1:4])
 			record.TagSize = int(uint32(tmpBuf[1])<<16 | uint32(tmpBuf[2])<<8 | uint32(tmpBuf[3]) + uint32(11))
-			fmt.Println("新建初始帧长度为", record.TagSize)
+			//fmt.Println("新建初始帧长度为", record.TagSize)
 			record.flv_tag = make([]byte, record.TagSize)
 
 			copy(record.flv_tag[record.pos:record.pos+len(payload)], payload)
@@ -185,13 +209,18 @@ func extractFlv(proto_rp interface{}, record *FlvRecord, rtpQueue *queue, flvFil
 		//得到一个flv tag
 
 		//有客户端就将flv数据发给客户端
-		if record.HttpServer.flvWriter != nil {
-			//FlvTagList.PushBack(flv_tag)
-			err := record.HttpServer.flvWriter.Write(record.flv_tag)
-			if err != nil {
-				return err
+		for i := 0; i < HttpServer.flvWriters.Size(); i++ {
+			e, _ := HttpServer.flvWriters.Get(i)
+			if e != nil {
+				w := e.(*FLVWriter)
+				if w.closed {
+					HttpServer.flvWriters.Remove(i)
+				} else {
+					w.Write(record.flv_tag)
+				}
 			}
 		}
+
 		//录制到文件中
 		err := flvFile.WriteTagDirect(record.flv_tag)
 		if err != nil {

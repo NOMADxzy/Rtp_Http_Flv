@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/emirpasic/gods/lists/arraylist"
 	"go-mpu/container/rtp"
+	"go-mpu/utils"
 	"sync"
 )
 
@@ -17,17 +18,26 @@ import (
 type queue struct {
 	m sync.RWMutex
 	//maxSize      int
+	Ssrc              uint32          //队列所属的流
 	FirstSeq          uint16          //第一个Rtp包的序号
 	PaddingWindowSize int             //滑动窗口大小
 	queue             *arraylist.List //rtpPacket队列
-	Conn              *conn           //维持Quic连接
-	checked           bool
+	checked           bool            //窗口内是否都已检验
 	readChan          chan interface{}
 	reading           bool
+	flvRecord         *FlvRecord   //解析flv结构
+	flvWriters        []*FLVWriter //http-flv对象
+	flvFile           *utils.File  //录制文件
 }
 
-func newQueue(wz int) *queue {
-	return &queue{queue: arraylist.New(), PaddingWindowSize: wz, readChan: make(chan interface{}, 1)}
+func newQueue(ssrc uint32, wz int, record *FlvRecord, flvFile *utils.File) *queue {
+	return &queue{
+		queue:             arraylist.New(),
+		PaddingWindowSize: wz,
+		Ssrc:              ssrc,
+		flvRecord:         record,
+		flvFile:           flvFile,
+		readChan:          make(chan interface{}, 1)}
 }
 
 func (q *queue) Enqueue(rp *rtp.RtpPack) {
@@ -85,7 +95,7 @@ func (q *queue) offerPacket() { //channel方式，多协程读取队列中的包
 				//重传
 				seq := q.FirstSeq + uint16(q.PaddingWindowSize)
 				fmt.Println("序号为", seq, "的包丢失，进行quic重传")
-				go q.GetByQuic(seq)
+				go GetByQuic(q, seq)
 				//q.queue.Set(i, pkt)
 			}
 			q.queue.Remove(0)
@@ -104,8 +114,8 @@ func (q *queue) Dequeue() interface{} { //必须确保paddingsize位置处的rtp
 	if rp == nil {
 		//重传
 		seq := q.FirstSeq + uint16(q.PaddingWindowSize)
-		fmt.Println("序号为", seq, "的包丢失，进行quic重传")
-		q.GetByQuic(seq)
+		fmt.Println("packet lost seq = ", seq, ", ssrc = ", q.Ssrc, "run quic request")
+		GetByQuic(q, seq)
 		//q.queue.Set(i, pkt)
 	}
 
@@ -124,9 +134,7 @@ func (q *queue) Dequeue() interface{} { //必须确保paddingsize位置处的rtp
 }
 
 func (q *queue) Check() int { //检查窗口内队列Rtp的存在性和有序性
-	if q.Conn == nil {
-		q.Conn = initQuic()
-	}
+
 	re_trans := 0
 	//rtpParser := parser.NewRtpParser()
 	for i := 0; i <= q.PaddingWindowSize; i++ {
@@ -135,8 +143,8 @@ func (q *queue) Check() int { //检查窗口内队列Rtp的存在性和有序性
 			//pkt := rtpParser.Parse([]byte{byte(128), byte(137), byte(16), byte(80), byte(14), byte(182),
 			//	byte(27), byte(244), byte(0), byte(15), byte(145), byte(144), byte(8), byte(0), byte(1)}) //quic重传
 			//q.queue.Set(i, pkt)
-			fmt.Println("序号为", int(q.FirstSeq)+i, "的包丢失，进行quic重传")
-			q.GetByQuic(q.FirstSeq + uint16(i))
+			fmt.Println("packet lost seq = ", int(q.FirstSeq)+i, ", ssrc = ", q.Ssrc, "run quic request")
+			GetByQuic(q, q.FirstSeq+uint16(i))
 			re_trans += 1
 		}
 		//if rp.(*rtp.RtpPack).SequenceNumber != q.FirstSeq+uint16(i) {
@@ -161,4 +169,15 @@ func (q *queue) print() {
 	}
 	fmt.Println()
 
+}
+
+func (q *queue) ResetFlvRecord() {
+	q.flvRecord.pos = 0
+	q.flvRecord.flv_tag = nil
+}
+
+func (q *queue) Close() {
+	if q.flvFile != nil {
+		q.flvFile.Close()
+	}
 }

@@ -13,7 +13,7 @@ import (
 
 const (
 	headerLen   = 11
-	maxQueueNum = 1024
+	maxQueueNum = 10240
 )
 
 type FLVWriter struct {
@@ -44,6 +44,7 @@ func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
 	pio.PutI32BE(ret.buf[:4], 0)
 	ret.ctx.Write(ret.buf[:4])
 	go func() {
+
 		err := ret.SendPacket()
 		if err != nil {
 			log.Println("SendPacket error:", err)

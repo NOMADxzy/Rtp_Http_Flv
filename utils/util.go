@@ -3,7 +3,13 @@ package utils
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
+	"fmt"
+	"go-mpu/configure"
+	"io"
 	"math"
+	"net/http"
+	"time"
 )
 
 func UintToBytes(val uint, index int) []byte {
@@ -35,4 +41,76 @@ func AmfStringToBytes(b *bytes.Buffer, val string) {
 func AmfDoubleToBytes(b *bytes.Buffer, val float64) {
 	b.WriteByte(0x00)
 	b.Write(Float64ToByte(val))
+}
+
+func Get(url string) map[string]interface{} {
+
+	// 超时时间：5秒
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+	var buffer [512]byte
+	result := bytes.NewBuffer(nil)
+	for {
+		n, err := resp.Body.Read(buffer[0:])
+		result.Write(buffer[0:n])
+		if err != nil && err == io.EOF {
+			break
+		} else if err != nil {
+			panic(err)
+		}
+	}
+
+	var res map[string]interface{}
+	json.Unmarshal(result.Bytes(), &res)
+	if res["data"].(map[string]interface{})["publishers"] == nil {
+		return nil
+	}
+	return res
+}
+
+type Publisher struct {
+	Key               string
+	url               string
+	Ssrc              uint32
+	id                uint32
+	video_total_bytes uint64
+	video_speed       uint64
+	audio_total_bytes uint64
+	audio_speed       uint64
+}
+
+func UpdatePublishers(publishers map[uint32]*Publisher) {
+
+	res := Get(configure.API_URL + "/stat/livestat")
+	if res == nil {
+		return
+	}
+	pubs := res["data"].(map[string]interface{})["publishers"].([]interface{})
+
+	for _, pub := range pubs {
+		p := pub.(map[string]interface{})
+
+		publishers[uint32(p["ssrc"].(float64))] = &Publisher{
+			Key:               p["key"].(string),
+			url:               p["url"].(string),
+			Ssrc:              uint32(p["ssrc"].(float64)),
+			id:                uint32(p["stream_id"].(float64)),
+			video_total_bytes: uint64(p["video_total_bytes"].(float64)),
+			video_speed:       uint64(p["video_speed"].(float64)),
+			audio_total_bytes: uint64(p["audio_total_bytes"].(float64)),
+			audio_speed:       uint64(p["audio_speed"].(float64)),
+		}
+	}
+}
+func CreateFlvFile(name string) *File {
+	flvFile, err := CreateFile("./" + name + ".flv")
+	if err != nil {
+		fmt.Println("Create FLV dump file error:", err)
+		return nil
+	}
+	return flvFile
 }
