@@ -24,10 +24,11 @@ type queue struct {
 	queue             *arraylist.List //rtpPacket队列
 	checked           bool            //窗口内是否都已检验
 	readChan          chan interface{}
-	reading           bool
-	flvRecord         *FlvRecord   //解析flv结构
-	flvWriters        []*FLVWriter //http-flv对象
-	flvFile           *utils.File  //录制文件
+	play              bool
+	flvRecord         *FlvRecord      //解析flv结构
+	flvWriters        *arraylist.List //http-flv对象
+	flvFile           *utils.File     //录制文件
+	cache             *Cache
 }
 
 func newQueue(ssrc uint32, wz int, record *FlvRecord, flvFile *utils.File) *queue {
@@ -37,7 +38,23 @@ func newQueue(ssrc uint32, wz int, record *FlvRecord, flvFile *utils.File) *queu
 		Ssrc:              ssrc,
 		flvRecord:         record,
 		flvFile:           flvFile,
-		readChan:          make(chan interface{}, 1)}
+		readChan:          make(chan interface{}, 1),
+		flvWriters:        arraylist.New(),
+		cache:             NewCache(),
+	}
+}
+
+func (q *queue) Play() {
+	for {
+		proto_rp := q.Dequeue()
+		err := extractFlv(proto_rp, q, false)
+		if err != nil {
+			q.ResetFlvRecord()
+		}
+		if q.queue.Size() <= q.PaddingWindowSize*2 {
+			break
+		}
+	}
 }
 
 func (q *queue) Enqueue(rp *rtp.RtpPack) {
@@ -77,7 +94,7 @@ func (q *queue) Enqueue(rp *rtp.RtpPack) {
 }
 
 func (q *queue) offerPacket() { //channel方式，多协程读取队列中的包，已弃用
-	q.reading = true
+	//q.reading = true
 	for {
 		rp_end, _ := q.queue.Get(q.PaddingWindowSize - 1)
 		if rp_end == nil {

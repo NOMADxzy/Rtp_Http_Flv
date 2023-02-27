@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"github.com/emirpasic/gods/lists/arraylist"
 	"github.com/zhangjunfang/livego/av"
 	"log"
 	"net"
@@ -13,8 +12,7 @@ import (
 var httpFlvAddr = flag.String("httpflv-addr", ":7001", "HTTP-FLV server listen address")
 
 type Server struct {
-	handler    av.Handler
-	flvWriters *arraylist.List
+	handler av.Handler
 	//FLVWriterMap map[string]*FLVWriter
 }
 
@@ -30,8 +28,7 @@ type streams struct {
 
 func NewServer(h av.Handler) *Server {
 	return &Server{
-		handler:    h,
-		flvWriters: arraylist.New(),
+		handler: h,
 	}
 }
 
@@ -70,8 +67,7 @@ func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
 	writer := NewFLVWriter(paths[0], paths[1], url, w)
 
 	//server.handler.HandleWriter(writer)
-	server.flvWriters.Add(writer)
-	//server.FLVWriterMap[path+r.RemoteAddr] = writer
+	HandleNewFlvWriter(path, writer)
 	writer.Wait()
 }
 func startHTTPFlv() *Server {

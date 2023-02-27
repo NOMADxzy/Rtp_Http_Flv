@@ -25,6 +25,7 @@ type FLVWriter struct {
 	closedChan      chan struct{}
 	ctx             http.ResponseWriter
 	packetQueue     chan []byte
+	init            bool
 }
 
 func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
@@ -54,7 +55,26 @@ func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
 	return ret
 }
 
+var Video_Initialization_Segment = []byte{
+	9, 0, 0, 56, 0, 0, 0, 0, 0, 0,
+	0, 23, 0, 0, 0, 0, 1, 100, 0, 40,
+	255, 225, 0, 30, 103, 100, 0, 40, 172, 217,
+	64, 120, 2, 39, 229, 192, 90, 128, 128, 128,
+	160, 0, 0, 3, 0, 32, 0, 0, 7, 129,
+	227, 6, 50, 192, 1, 0, 6, 104, 235, 227,
+	203, 34, 192, 253, 248, 248, 0}
+var Audio_Initialization_Segment = []byte{
+	8, 0, 0, 7, 0, 0, 0, 0, 0, 0,
+	0, 175, 0, 18, 16, 86, 229, 0,
+}
+
 func (flvWriter *FLVWriter) Write(p []byte) (err error) {
+	//isKeyFrame := p[11] == byte(23)
+	if !flvWriter.init {
+		flvWriter.packetQueue <- Video_Initialization_Segment
+		flvWriter.packetQueue <- Audio_Initialization_Segment
+		flvWriter.init = true
+	}
 	err = nil
 	if flvWriter.closed {
 		err = errors.New("flvwrite source closed")

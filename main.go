@@ -14,6 +14,8 @@ import (
 var HttpServer = startHTTPFlv()
 var RtpQueueMap map[uint32]*queue
 var publishers map[uint32]*utils.Publisher
+var keySsrcMap map[string]uint32
+var myflvWriter *FLVWriter
 
 type FlvRecord struct {
 	flv_tag []byte
@@ -42,14 +44,21 @@ func handleNewPacket(rp *rtp.RtpPack) {
 		}
 		utils.UpdatePublishers(publishers)
 
-		//创建rtp流队列
+		//设置key和ssrc的映射，以播放flv
+		if keySsrcMap == nil {
+			keySsrcMap = make(map[string]uint32)
+		}
 		key := publishers[rp.SSRC].Key
-		channel := strings.SplitN(key, "/", 2)[1]
+		keySsrcMap[key] = rp.SSRC
+
+		//创建rtp流队列
+		channel := strings.SplitN(key, "/", 2)[1] //文件名
 
 		flvRecord := &FlvRecord{
 			nil, 0, 0, uint32(0), 0,
 		}
 		rtpQueue = newQueue(rp.SSRC, configure.RTP_QUEUE_PADDING_WINDOW_SIZE, flvRecord, utils.CreateFlvFile(channel))
+		//rtpQueue.flvWriters.Add(myflvWriter) //TODO
 		RtpQueueMap[rp.SSRC] = rtpQueue
 	}
 
@@ -66,23 +75,29 @@ func handleNewPacket(rp *rtp.RtpPack) {
 	//if !rtpQueue.reading {
 	//	go rtpQueue.offerPacket()
 	//}
-	for {
-		proto_rp := rtpQueue.Dequeue() //阻塞
-		err := extractFlv(proto_rp, rtpQueue.flvRecord, rtpQueue, rtpQueue.flvFile, false)
-		if err != nil {
-			rtpQueue.ResetFlvRecord()
-		}
-		if rtpQueue.queue.Size() <= rtpQueue.PaddingWindowSize*2 {
-			break
-		}
-	}
+	//for {
+	//	proto_rp := rtpQueue.Dequeue() //阻塞
+	//	err := extractFlv(proto_rp, rtpQueue, false)
+	//	if err != nil {
+	//		rtpQueue.ResetFlvRecord()
+	//	}
+	//	if rtpQueue.queue.Size() <= rtpQueue.PaddingWindowSize*2 {
+	//		break
+	//	}
+	//}
+	rtpQueue.Play()
 
 }
 
-func receiveRtp() {
-	address := "239.0.0.0:5222"
+func HandleNewFlvWriter(key string, flvWriter *FLVWriter) {
+	rtpQueue := RtpQueueMap[keySsrcMap[key]]
+	rtpQueue.flvWriters.Add(flvWriter)
+	//myflvWriter = flvWriter //TODO
+}
 
-	addr, err := net.ResolveUDPAddr("udp4", address)
+func receiveRtp() {
+
+	addr, err := net.ResolveUDPAddr("udp4", configure.UDP_SOCKET_ADDR)
 	if err != nil {
 		panic(err)
 	}
@@ -143,7 +158,9 @@ func receiveRtp() {
 }
 
 //从rtp包中提取出flv_tag，根据record信息组合分片，debug打印调试信息
-func extractFlv(proto_rp interface{}, record *FlvRecord, rtpQueue *queue, flvFile *utils.File, debug bool) error {
+func extractFlv(proto_rp interface{}, rtpQueue *queue, debug bool) error {
+	record := rtpQueue.flvRecord
+
 	if proto_rp == nil {
 		record.flv_tag = nil
 		record.pos = 0
@@ -161,7 +178,7 @@ func extractFlv(proto_rp interface{}, record *FlvRecord, rtpQueue *queue, flvFil
 		fmt.Println("-----------------", rp.SequenceNumber, "-----------------")
 	}
 	if int(rp.SequenceNumber)%100 == 0 {
-		rtpQueue.print()
+		//rtpQueue.print()
 	}
 
 	if marker == byte(0) { //该帧未结束
@@ -208,21 +225,30 @@ func extractFlv(proto_rp interface{}, record *FlvRecord, rtpQueue *queue, flvFil
 		}
 		//得到一个flv tag
 
-		//有客户端就将flv数据发给客户端
-		for i := 0; i < HttpServer.flvWriters.Size(); i++ {
-			e, _ := HttpServer.flvWriters.Get(i)
-			if e != nil {
-				w := e.(*FLVWriter)
-				if w.closed {
-					HttpServer.flvWriters.Remove(i)
-				} else {
-					w.Write(record.flv_tag)
+		//将flv数据发送到该流下的所有客户端
+		rtpQueue.cache.Write(record.flv_tag)
+		for i := 0; i < rtpQueue.flvWriters.Size(); i++ {
+			val, f := rtpQueue.flvWriters.Get(i)
+			if f {
+				writer := val.(*FLVWriter)
+				if writer.closed {
+					rtpQueue.flvWriters.Remove(i)
+				} else { //播放该分段
+					//if writer.init {
+					//	rtpQueue.cache.Send(writer)
+					//	writer.init = true
+					//} else {
+					//	if record.flv_tag[11] == byte(23) {
+					//		fmt.Println("------关键帧-----")
+					//	}
+					//}
+					writer.Write(record.flv_tag)
 				}
 			}
 		}
 
 		//录制到文件中
-		err := flvFile.WriteTagDirect(record.flv_tag)
+		err := rtpQueue.flvFile.WriteTagDirect(record.flv_tag)
 		if err != nil {
 			return err
 		}
