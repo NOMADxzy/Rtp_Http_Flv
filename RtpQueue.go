@@ -28,7 +28,7 @@ type queue struct {
 	flvRecord         *FlvRecord      //解析flv结构
 	flvWriters        *arraylist.List //http-flv对象
 	flvFile           *utils.File     //录制文件
-	cache             *Cache
+	cache             *SegmentCache
 }
 
 func newQueue(ssrc uint32, wz int, record *FlvRecord, flvFile *utils.File) *queue {
@@ -190,7 +190,7 @@ func (q *queue) print() {
 
 func (q *queue) ResetFlvRecord() {
 	q.flvRecord.pos = 0
-	q.flvRecord.flv_tag = nil
+	q.flvRecord.flvTag = nil
 }
 
 func (q *queue) Close() {
