@@ -115,6 +115,15 @@ func CreateFlvFile(name string) *File {
 	return flvFile
 }
 
+func IsTagHead(payload []byte) bool {
+	if payload[0] == byte(8) || payload[0] == byte(9) {
+		if payload[8] == byte(0) && payload[9] == byte(0) && payload[10] == byte(0) {
+			return true
+		}
+	}
+	return false
+}
+
 var VideoInitializationSegment = []byte{
 	9, 0, 0, 56, 0, 0, 0, 0, 0, 0,
 	0, 23, 0, 0, 0, 0, 1, 100, 0, 40,

@@ -46,8 +46,8 @@ func newQueue(ssrc uint32, wz int, record *FlvRecord, flvFile *utils.File) *queu
 
 func (q *queue) Play() {
 	for {
-		proto_rp := q.Dequeue()
-		err := extractFlv(proto_rp, q, false)
+		protoRp := q.Dequeue()
+		err := extractFlv(protoRp, q)
 		if err != nil {
 			q.ResetFlvRecord()
 		}

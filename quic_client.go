@@ -28,10 +28,13 @@ func GetByQuic(q *queue, seq uint16) {
 	lock.Lock() //防止多条流同时调用重传导致出错
 	defer lock.Unlock()
 
+	if !configure.ENABLE_QUIC {
+		return
+	}
+
 	if Conn == nil {
 		Conn = initQuic()
 	}
-
 	// run the client
 	// 根据序列号请求
 	_, err := Conn.WriteSsrc(q.Ssrc)
