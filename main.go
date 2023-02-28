@@ -1,11 +1,11 @@
 package main
 
 import (
+	"Rtp_Http_Flv/configure"
+	"Rtp_Http_Flv/container/rtp"
+	"Rtp_Http_Flv/parser"
+	"Rtp_Http_Flv/utils"
 	"github.com/emirpasic/gods/lists/arraylist"
-	"go-mpu/configure"
-	"go-mpu/container/rtp"
-	"go-mpu/parser"
-	"go-mpu/utils"
 	"net"
 	"strings"
 	"time"
@@ -135,7 +135,7 @@ func receiveRtp() {
 
 }
 
-//从rtp包中提取出flvTag，根据record信息组合分片，debug打印调试信息
+// 从rtp包中提取出flvTag，根据record信息组合分片，debug打印调试信息
 func extractFlv(protoRp interface{}, rtpQueue *queue) error {
 	record := rtpQueue.flvRecord
 

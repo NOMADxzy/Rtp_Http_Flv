@@ -1,16 +1,23 @@
-module go-mpu
+module  Rtp_Http_Flv
 
-go 1.14
+go 1.19
 
 require (
 	github.com/emirpasic/gods v1.18.1
-	github.com/gwuhaolin/livego v0.0.0-20220914133149-42d7596e8048 // indirect
-	github.com/lucas-clemente/quic-go v0.14.0
-	github.com/orcaman/concurrent-map v1.0.0 // indirect
+	github.com/gwuhaolin/livego v0.0.0-20220914133149-42d7596e8048
+	github.com/quic-go/quic-go v0.32.0
+)
+
+require (
+	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
+	github.com/golang/mock v1.6.0 // indirect
+	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
+	github.com/onsi/ginkgo/v2 v2.2.0 // indirect
 	github.com/stretchr/testify v1.8.1 // indirect
-	github.com/zhangjunfang/livego v0.0.0-20180326092835-c4faa1080980 // indirect
-	github.com/zhangpeihao/goamf v0.0.0-20140409082417-3ff2c19514a8 // indirect
-	github.com/zhangpeihao/goflv v0.0.0-20140409083800-f2c8a1d6c9e1
-	github.com/zhangpeihao/gortmp v0.0.0-20161114025007-d5f2189e629f
-	github.com/zhangpeihao/log v0.0.0-20170117094621-62e921e41859
+	golang.org/x/crypto v0.4.0 // indirect
+	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db // indirect
+	golang.org/x/mod v0.6.0 // indirect
+	golang.org/x/net v0.4.0 // indirect
+	golang.org/x/sys v0.3.0 // indirect
+	golang.org/x/tools v0.2.0 // indirect
 )

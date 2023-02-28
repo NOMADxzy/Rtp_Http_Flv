@@ -1,15 +1,15 @@
 package main
 
 import (
+	"Rtp_Http_Flv/configure"
+	"Rtp_Http_Flv/container/rtp"
 	"crypto/tls"
 	"fmt"
-	"github.com/lucas-clemente/quic-go"
-	"go-mpu/configure"
-	"go-mpu/container/rtp"
+	"github.com/quic-go/quic-go"
 	"sync"
 )
 
-//var Conn = initQuic()
+// var Conn = initQuic()
 var lock sync.Mutex
 var Conn *conn
 

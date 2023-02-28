@@ -1,29 +1,30 @@
 package main
 
 import (
+	"Rtp_Http_Flv/container/rtp"
+	"Rtp_Http_Flv/parser"
 	"context"
 	"encoding/binary"
-	"github.com/lucas-clemente/quic-go"
-	"go-mpu/container/rtp"
-	"go-mpu/parser"
+	"errors"
+	"github.com/quic-go/quic-go"
 )
 
 var rtpParser = parser.NewRtpParser()
 
 type conn struct {
-	session    quic.Session
+	Connection quic.Connection
 	infoStream quic.Stream
 	dataStream quic.Stream
 }
 
-func newConn(sess quic.Session, is_server bool) (*conn, error) {
+func newConn(sess quic.Connection, is_server bool) (*conn, error) {
 	if is_server {
 		dstream, err := sess.OpenStream()
 		if err != nil {
 			return nil, err
 		}
 		return &conn{
-			session:    sess,
+			Connection: sess,
 			dataStream: dstream,
 		}, nil
 	} else {
@@ -32,19 +33,19 @@ func newConn(sess quic.Session, is_server bool) (*conn, error) {
 			return nil, err
 		}
 		return &conn{
-			session:    sess,
+			Connection: sess,
 			infoStream: istream,
 		}, nil
 	}
 }
 
-//func (c *conn) DataStream() quic.Stream {
-//	return c.dataStream
-//}
+//	func (c *conn) DataStream() quic.Stream {
+//		return c.dataStream
+//	}
 func (c *conn) ReadLen(len *uint16) error {
 	if c.infoStream == nil {
 		var err error
-		c.dataStream, err = c.session.AcceptStream(context.Background())
+		c.dataStream, err = c.Connection.AcceptStream(context.Background())
 		// TODO: check stream id
 		if err != nil {
 			return err
@@ -62,7 +63,7 @@ func (c *conn) ReadLen(len *uint16) error {
 func (c *conn) ReadRtp(pkt **rtp.RtpPack) error {
 	if c.dataStream == nil {
 		var err error
-		c.dataStream, err = c.session.AcceptStream(context.Background())
+		c.dataStream, err = c.Connection.AcceptStream(context.Background())
 		// TODO: check stream id
 		if err != nil {
 			return err
@@ -73,6 +74,9 @@ func (c *conn) ReadRtp(pkt **rtp.RtpPack) error {
 	err := c.ReadLen(&len)
 	if err != nil {
 		return err
+	}
+	if len == 0 {
+		return errors.New("RtpCacheNotFound")
 	}
 	buf := make([]byte, len)
 	_, err = c.dataStream.Read(buf)
