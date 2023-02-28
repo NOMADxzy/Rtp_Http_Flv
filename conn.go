@@ -92,3 +92,9 @@ func (c *conn) WriteSeq(seq uint16) (int, error) {
 	binary.BigEndian.PutUint16(seqB, seq)
 	return c.infoStream.Write(seqB)
 }
+
+func (c *conn) WriteSsrc(ssrc uint32) (int, error) {
+	ssrc_b := make([]byte, 4)
+	binary.BigEndian.PutUint32(ssrc_b, ssrc)
+	return c.infoStream.Write(ssrc_b)
+}

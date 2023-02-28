@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zhangjunfang/livego/av"
-	"github.com/zhangjunfang/livego/utils/pio"
+	"github.com/gwuhaolin/livego/av"
+	"github.com/gwuhaolin/livego/utils/pio"
 )
 
 const (
 	headerLen   = 11
-	maxQueueNum = 1024
+	maxQueueNum = 10240
 )
 
 type FLVWriter struct {
@@ -25,6 +25,7 @@ type FLVWriter struct {
 	closedChan      chan struct{}
 	ctx             http.ResponseWriter
 	packetQueue     chan []byte
+	init            bool
 }
 
 func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
@@ -44,6 +45,7 @@ func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
 	pio.PutI32BE(ret.buf[:4], 0)
 	ret.ctx.Write(ret.buf[:4])
 	go func() {
+
 		err := ret.SendPacket()
 		if err != nil {
 			log.Println("SendPacket error:", err)
