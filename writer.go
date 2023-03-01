@@ -1,14 +1,11 @@
 package main
 
 import (
+	"Rtp_Http_Flv/utils"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
-	"time"
-
-	"github.com/gwuhaolin/livego/av"
-	"github.com/gwuhaolin/livego/utils/pio"
 )
 
 const (
@@ -17,8 +14,7 @@ const (
 )
 
 type FLVWriter struct {
-	Uid string
-	av.RWBaser
+	Uid             string
 	app, title, url string
 	buf             []byte
 	closed          bool
@@ -35,14 +31,13 @@ func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
 		title:       title,
 		url:         url,
 		ctx:         ctx,
-		RWBaser:     av.NewRWBaser(time.Second * 10),
 		closedChan:  make(chan struct{}),
 		buf:         make([]byte, headerLen),
 		packetQueue: make(chan []byte, maxQueueNum),
 	}
 
 	ret.ctx.Write([]byte{0x46, 0x4c, 0x56, 0x01, 0x05, 0x00, 0x00, 0x00, 0x09})
-	pio.PutI32BE(ret.buf[:4], 0)
+	utils.PutI32BE(ret.buf[:4], 0)
 	ret.ctx.Write(ret.buf[:4])
 	go func() {
 
@@ -89,7 +84,7 @@ func (flvWriter *FLVWriter) SendPacket() error {
 				return err
 			}
 
-			pio.PutI32BE(h[:4], int32(preDataLen))
+			utils.PutI32BE(h[:4], int32(preDataLen))
 			if _, err := flvWriter.ctx.Write(h[:4]); err != nil {
 				return err
 			}
@@ -118,10 +113,17 @@ func (flvWriter *FLVWriter) Close(error) {
 	flvWriter.closed = true
 }
 
-func (flvWriter *FLVWriter) Info() (ret av.Info) {
-	ret.UID = flvWriter.Uid
-	ret.URL = flvWriter.url
-	ret.Key = flvWriter.app + "/" + flvWriter.title
-	ret.Inter = true
-	return
+type Info struct {
+	Uid string
+	Key string
+	Url string
+}
+
+func (flvWriter *FLVWriter) GetInfo() (ret *Info) {
+	ret = &Info{
+		Uid: flvWriter.Uid,
+		Key: flvWriter.app + "/" + flvWriter.title,
+		Url: flvWriter.url,
+	}
+	return ret
 }
