@@ -30,41 +30,41 @@ func (flvRecord *FlvRecord) Reset() {
 }
 
 func main() {
+	//初始化一些表
+	publishers = make(map[uint32]*utils.Publisher)
+	keySsrcMap = make(map[string]uint32)
+	RtpQueueMap = make(map[uint32]*queue)
+
 	startHTTPFlv()
 	receiveRtp()
 }
 
+func handleNewStream(ssrc uint32) *queue {
+	//更新流源信息
+	utils.UpdatePublishers(publishers)
+
+	//设置key和ssrc的映射，以播放flv
+	key := publishers[ssrc].Key
+	keySsrcMap[key] = ssrc
+
+	//创建rtp流队列
+	channel := strings.SplitN(key, "/", 2)[1] //文件名
+
+	flvRecord := &FlvRecord{
+		nil, 0, 0, false,
+	}
+	flvFile := utils.CreateFlvFile(channel)
+	flvFiles.Add(flvFile)
+	rtpQueue := newQueue(ssrc, configure.RTP_QUEUE_PADDING_WINDOW_SIZE, flvRecord, flvFile)
+	RtpQueueMap[ssrc] = rtpQueue
+	return rtpQueue
+}
+
 func handleNewPacket(rp *rtp.RtpPack) {
 
-	if RtpQueueMap == nil {
-		RtpQueueMap = make(map[uint32]*queue)
-	}
 	rtpQueue := RtpQueueMap[rp.SSRC]
 	if rtpQueue == nil { //新的ssrc流
-
-		//更新流源信息
-		if publishers == nil {
-			publishers = make(map[uint32]*utils.Publisher)
-		}
-		utils.UpdatePublishers(publishers)
-
-		//设置key和ssrc的映射，以播放flv
-		if keySsrcMap == nil {
-			keySsrcMap = make(map[string]uint32)
-		}
-		key := publishers[rp.SSRC].Key
-		keySsrcMap[key] = rp.SSRC
-
-		//创建rtp流队列
-		channel := strings.SplitN(key, "/", 2)[1] //文件名
-
-		flvRecord := &FlvRecord{
-			nil, 0, 0, false,
-		}
-		flvFile := utils.CreateFlvFile(channel)
-		flvFiles.Add(flvFile)
-		rtpQueue = newQueue(rp.SSRC, configure.RTP_QUEUE_PADDING_WINDOW_SIZE, flvRecord, flvFile)
-		RtpQueueMap[rp.SSRC] = rtpQueue
+		rtpQueue = handleNewStream(rp.SSRC)
 	}
 
 	//Rtp包顺序存放到队列中
@@ -125,9 +125,7 @@ func receiveRtp() {
 			if rp == nil {
 				continue
 			}
-
 			handleNewPacket(rp)
-
 		}
 	}()
 
