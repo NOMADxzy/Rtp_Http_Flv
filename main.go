@@ -57,6 +57,9 @@ func handleNewStream(ssrc uint32) *queue {
 	flvFiles.Add(flvFile)
 	rtpQueue := newQueue(ssrc, configure.RTP_QUEUE_PADDING_WINDOW_SIZE, flvRecord, flvFile)
 	RtpQueueMap[ssrc] = rtpQueue
+
+	go rtpQueue.RecvPacket()
+	go rtpQueue.Play()
 	return rtpQueue
 }
 
@@ -68,16 +71,8 @@ func handleNewPacket(rp *rtp.RtpPack) {
 	}
 
 	//Rtp包顺序存放到队列中
-	rtpQueue.Enqueue(rp)
-
-	if rtpQueue.queue.Size() < 2*rtpQueue.PaddingWindowSize { //刚开始先缓存一定量
-		return
-	} else if !rtpQueue.checked {
-		rtpQueue.Check()
-		return
-	}
-	//到达一定量后就从队列中取rtp了
-	rtpQueue.Play()
+	//rtpQueue.Enqueue(rp)
+	rtpQueue.inChan <- rp
 
 }
 
