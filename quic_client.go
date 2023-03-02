@@ -28,7 +28,7 @@ func GetByQuic(q *queue, seq uint16) {
 	lock.Lock() //防止多条流同时调用重传导致出错
 	defer lock.Unlock()
 
-	if !configure.ENABLE_QUIC {
+	if configure.DISABLE_QUIC {
 		return
 	}
 

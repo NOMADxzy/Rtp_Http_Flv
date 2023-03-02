@@ -118,7 +118,10 @@ func CreateFlvFile(name string) *File {
 func IsTagHead(payload []byte) bool {
 	if payload[0] == byte(8) || payload[0] == byte(9) {
 		if payload[8] == byte(0) && payload[9] == byte(0) && payload[10] == byte(0) {
-			return true
+			tmpBuf := make([]byte, 4)
+			copy(tmpBuf[1:], payload[1:4])
+			TagSize := int(uint32(tmpBuf[1])<<16 | uint32(tmpBuf[2])<<8 | uint32(tmpBuf[3]) + uint32(11))
+			return TagSize == len(payload)
 		}
 	}
 	return false
@@ -129,17 +132,4 @@ func PutI32BE(b []byte, v int32) {
 	b[1] = byte(v >> 16)
 	b[2] = byte(v >> 8)
 	b[3] = byte(v)
-}
-
-var VideoInitializationSegment = []byte{
-	9, 0, 0, 56, 0, 0, 0, 0, 0, 0,
-	0, 23, 0, 0, 0, 0, 1, 100, 0, 40,
-	255, 225, 0, 30, 103, 100, 0, 40, 172, 217,
-	64, 120, 2, 39, 229, 192, 90, 128, 128, 128,
-	160, 0, 0, 3, 0, 32, 0, 0, 7, 129,
-	227, 6, 50, 192, 1, 0, 6, 104, 235, 227,
-	203, 34, 192, 253, 248, 248, 0}
-var AudioInitializationSegment = []byte{
-	8, 0, 0, 7, 0, 0, 0, 0, 0, 0,
-	0, 175, 0, 18, 16, 86, 229, 0,
 }

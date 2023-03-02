@@ -30,6 +30,9 @@ func (flvRecord *FlvRecord) Reset() {
 }
 
 func main() {
+	if !configure.GetFlag() {
+		return
+	}
 	//初始化一些表
 	publishers = make(map[uint32]*utils.Publisher)
 	keySsrcMap = make(map[string]uint32)
@@ -89,8 +92,8 @@ func receiveRtp() {
 	}
 
 	// Open up a connection
-	conn, err := net.ListenMulticastUDP("udp4", nil, addr)
-	//conn, err := net.ListenUDP("udp", addr)
+	//conn, err := net.ListenMulticastUDP("udp4", nil, addr)
+	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		panic(err)
 	}
@@ -197,6 +200,7 @@ func extractFlv(protoRp interface{}, rtpQueue *queue) error {
 						if err != nil {
 							return err
 						}
+						writer.Write(record.flvTag)
 						writer.init = true
 					} else {
 						writer.Write(record.flvTag)
@@ -212,8 +216,7 @@ func extractFlv(protoRp interface{}, rtpQueue *queue) error {
 		}
 		//fmt.Println("rtp seq:", rp.SequenceNumber, ",payload size: ", len(flvTag), ",rtp timestamp: ", rp.Timestamp)
 
-		record.flvTag = nil
-		record.pos = 0
+		record.Reset()
 
 	}
 	return nil

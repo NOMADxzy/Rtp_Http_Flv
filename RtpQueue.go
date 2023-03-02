@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Rtp_Http_Flv/configure"
 	"Rtp_Http_Flv/container/rtp"
 	"Rtp_Http_Flv/utils"
 	"errors"
@@ -24,7 +25,6 @@ type queue struct {
 	FirstSeq          uint16          //第一个Rtp包的序号
 	PaddingWindowSize int             //滑动窗口大小
 	queue             *arraylist.List //rtpPacket队列
-	checked           bool            //窗口内是否都已检验
 	outChan           chan interface{}
 	inChan            chan interface{}
 	init              bool
@@ -42,8 +42,8 @@ func newQueue(ssrc uint32, wz int, record *FlvRecord, flvFile *utils.File) *queu
 		Ssrc:              ssrc,
 		flvRecord:         record,
 		flvFile:           flvFile,
-		outChan:           make(chan interface{}, 10),
-		inChan:            make(chan interface{}, 10),
+		outChan:           make(chan interface{}, configure.RTP_QUEUE_CHAN_SIZE),
+		inChan:            make(chan interface{}, configure.RTP_QUEUE_CHAN_SIZE),
 		flvWriters:        arraylist.New(),
 		cache:             NewCache(),
 	}
@@ -131,35 +131,6 @@ func (q *queue) Enqueue(rp *rtp.RtpPack) {
 
 }
 
-func (q *queue) offerPacket() { //channel方式，多协程读取队列中的包，已弃用
-	//q.reading = true
-	for {
-		rp_end, _ := q.queue.Get(q.PaddingWindowSize - 1)
-		if rp_end == nil {
-			continue
-		}
-		rp0, _ := q.queue.Get(0)
-		if q.queue.Size() > q.PaddingWindowSize {
-
-			//fmt.Println(rp0)
-			q.outChan <- rp0
-
-			q.m.Lock()
-			rp, _ := q.queue.Get(q.PaddingWindowSize)
-			if rp == nil {
-				//重传
-				seq := q.FirstSeq + uint16(q.PaddingWindowSize)
-				fmt.Println("序号为", seq, "的包丢失，进行quic重传")
-				go GetByQuic(q, seq)
-				//q.queue.Set(i, pkt)
-			}
-			q.queue.Remove(0)
-			q.FirstSeq += 1
-			q.m.Unlock()
-		}
-	}
-}
-
 func (q *queue) Dequeue() interface{} { //必须确保paddingsize内的rtp包已到达
 	//确保窗口内的包都存在
 	rp, _ := q.queue.Get(q.PaddingWindowSize)
@@ -181,25 +152,15 @@ func (q *queue) Dequeue() interface{} { //必须确保paddingsize内的rtp包已
 }
 
 func (q *queue) Check() int { //检查窗口内队列Rtp的存在性和有序性
-
 	re_trans := 0
 	//rtpParser := parser.NewRtpParser()
 	for i := 0; i < q.PaddingWindowSize; i++ {
 		rp, _ := q.queue.Get(i)
 		if rp == nil {
-			//pkt := rtpParser.Parse([]byte{byte(128), byte(137), byte(16), byte(80), byte(14), byte(182),
-			//	byte(27), byte(244), byte(0), byte(15), byte(145), byte(144), byte(8), byte(0), byte(1)}) //quic重传
-			//q.queue.Set(i, pkt)
 			fmt.Println("packet lost seq = ", int(q.FirstSeq)+i, ", ssrc = ", q.Ssrc, "run quic request")
 			GetByQuic(q, q.FirstSeq+uint16(i))
 			re_trans += 1
 		}
-		//if rp.(*rtp.RtpPack).SequenceNumber != q.FirstSeq+uint16(i) {
-		//	fmt.Println("err ！Rtp Queue not sorted, FirstSeq:", q.FirstSeq, ", i:", i, ",SeqNum:", rp.(*rtp.RtpPack).SequenceNumber)
-		//}
-	}
-	if re_trans == 0 {
-		q.checked = true
 	}
 	return re_trans
 }
