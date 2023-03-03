@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"net/http"
 	"time"
 )
@@ -125,6 +126,15 @@ func IsTagHead(payload []byte) bool {
 		}
 	}
 	return false
+}
+
+func IsPacketLoss() bool {
+	r := rand.Intn(1000)
+	if float64(r)/1000.0 >= configure.PACKET_LOSS_RATE {
+		return false
+	} else {
+		return true
+	}
 }
 
 func PutI32BE(b []byte, v int32) {

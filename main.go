@@ -112,7 +112,7 @@ func receiveRtp() {
 			buff := make([]byte, 2*1024)
 			//num, err := conn.Read(buff)
 			num, _, err := conn.ReadFromUDP(buff)
-			if err != nil {
+			if err != nil || utils.IsPacketLoss() {
 				continue
 			}
 
