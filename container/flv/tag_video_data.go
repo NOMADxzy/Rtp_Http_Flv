@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"go-mpu/container/h264"
-	"go-mpu/utils"
+	"Rtp_Http_Flv/container/h264"
+	"Rtp_Http_Flv/utils"
 )
 
 // ==========================================
-// 				Video Tag Data
+//
+//	Video Tag Data
+//
 // ==========================================
 // codecID = 7 , AvcVideoPacket
 type AvcVideoPacket struct {

@@ -107,7 +107,7 @@ func UpdatePublishers(publishers map[uint32]*Publisher) {
 	}
 }
 func CreateFlvFile(name string) *File {
-	flvFile, err := CreateFile("./" + name + ".flv")
+	flvFile, err := CreateFile(configure.RECORD_DIR + "/" + name + ".flv")
 	if err != nil {
 		fmt.Println("Create FLV dump file error:", err)
 		return nil
