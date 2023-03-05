@@ -5,16 +5,27 @@ import (
 	"Rtp_Http_Flv/container/rtp"
 	"Rtp_Http_Flv/parser"
 	"Rtp_Http_Flv/utils"
+	"fmt"
 	"github.com/emirpasic/gods/lists/arraylist"
 	"net"
 	"strings"
 	"time"
 )
 
-var RtpQueueMap map[uint32]*queue
-var publishers map[uint32]*utils.Publisher
-var keySsrcMap map[string]uint32
-var flvFiles *arraylist.List
+type App struct { //边缘节点实体
+	RtpQueueMap map[uint32]*queue
+	publishers  map[uint32]*utils.Publisher
+	keySsrcMap  map[string]uint32
+	flvFiles    *arraylist.List
+	quicConn    *conn
+}
+
+var app *App
+
+//var RtpQueueMap map[uint32]*queue
+//var publishers map[uint32]*utils.Publisher
+//var keySsrcMap map[string]uint32
+//var flvFiles *arraylist.List
 
 type FlvRecord struct {
 	flvTag         []byte //记录当前flvTag写入的字节情况
@@ -34,9 +45,14 @@ func main() {
 		return
 	}
 	//初始化一些表
-	publishers = make(map[uint32]*utils.Publisher)
-	keySsrcMap = make(map[string]uint32)
-	RtpQueueMap = make(map[uint32]*queue)
+	app = &App{
+		publishers:  make(map[uint32]*utils.Publisher),
+		keySsrcMap:  make(map[string]uint32),
+		RtpQueueMap: make(map[uint32]*queue),
+		flvFiles:    arraylist.New(), //用于关闭打开的文件具柄
+	}
+
+	go app.CheckAlive()
 
 	startHTTPFlv()
 	receiveRtp()
@@ -44,11 +60,12 @@ func main() {
 
 func handleNewStream(ssrc uint32) *queue {
 	//更新流源信息
-	utils.UpdatePublishers(publishers)
+	app.publishers = utils.UpdatePublishers()
+	fmt.Println("new stream created ssrc = ", ssrc)
 
 	//设置key和ssrc的映射，以播放flv
-	key := publishers[ssrc].Key
-	keySsrcMap[key] = ssrc
+	key := app.publishers[ssrc].Key
+	app.keySsrcMap[key] = ssrc
 
 	//创建rtp流队列
 	channel := strings.SplitN(key, "/", 2)[1] //文件名
@@ -57,9 +74,9 @@ func handleNewStream(ssrc uint32) *queue {
 		nil, 0, 0, false,
 	}
 	flvFile := utils.CreateFlvFile(channel)
-	flvFiles.Add(flvFile)
-	rtpQueue := newQueue(ssrc, configure.RTP_QUEUE_PADDING_WINDOW_SIZE, flvRecord, flvFile)
-	RtpQueueMap[ssrc] = rtpQueue
+	app.flvFiles.Add(flvFile)
+	rtpQueue := newQueue(ssrc, key, configure.RTP_QUEUE_PADDING_WINDOW_SIZE, flvRecord, flvFile)
+	app.RtpQueueMap[ssrc] = rtpQueue
 
 	go rtpQueue.RecvPacket()
 	go rtpQueue.Play()
@@ -68,7 +85,7 @@ func handleNewStream(ssrc uint32) *queue {
 
 func handleNewPacket(rp *rtp.RtpPack) {
 
-	rtpQueue := RtpQueueMap[rp.SSRC]
+	rtpQueue := app.RtpQueueMap[rp.SSRC]
 	if rtpQueue == nil { //新的ssrc流
 		rtpQueue = handleNewStream(rp.SSRC)
 	}
@@ -80,7 +97,7 @@ func handleNewPacket(rp *rtp.RtpPack) {
 }
 
 func HandleNewFlvWriter(key string, flvWriter *FLVWriter) {
-	rtpQueue := RtpQueueMap[keySsrcMap[key]]
+	rtpQueue := app.RtpQueueMap[app.keySsrcMap[key]]
 	rtpQueue.flvWriters.Add(flvWriter)
 }
 
@@ -98,9 +115,8 @@ func receiveRtp() {
 		panic(err)
 	}
 
-	flvFiles = arraylist.New() //用于关闭打开的文件具柄
 	defer func() {
-		for _, val := range flvFiles.Values() {
+		for _, val := range app.flvFiles.Values() {
 			flvFile := val.(*utils.File)
 			flvFile.Close()
 		}
@@ -220,4 +236,17 @@ func extractFlv(protoRp interface{}, rtpQueue *queue) error {
 
 	}
 	return nil
+}
+
+func (app *App) CheckAlive() {
+	for {
+		<-time.After(5 * time.Second) //
+		app.publishers = utils.UpdatePublishers()
+		for ssrc := range app.RtpQueueMap {
+			info := app.publishers[ssrc]
+			if info == nil { //流已关闭
+				app.RtpQueueMap[ssrc].Close()
+			}
+		}
+	}
 }

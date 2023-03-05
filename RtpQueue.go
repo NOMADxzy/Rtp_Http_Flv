@@ -21,7 +21,8 @@ type queue struct {
 	m  sync.RWMutex
 	wg sync.WaitGroup
 	//maxSize      int
-	Ssrc              uint32          //队列所属的流
+	Ssrc              uint32 //队列所属的流
+	ChannelKey        string
 	FirstSeq          uint16          //第一个Rtp包的序号
 	PaddingWindowSize int             //滑动窗口大小
 	queue             *arraylist.List //rtpPacket队列
@@ -35,11 +36,12 @@ type queue struct {
 	accPackets        int //记录收到包的数量
 }
 
-func newQueue(ssrc uint32, wz int, record *FlvRecord, flvFile *utils.File) *queue {
+func newQueue(ssrc uint32, key string, wz int, record *FlvRecord, flvFile *utils.File) *queue {
 	return &queue{
 		queue:             arraylist.New(),
 		PaddingWindowSize: wz,
 		Ssrc:              ssrc,
+		ChannelKey:        key,
 		flvRecord:         record,
 		flvFile:           flvFile,
 		outChan:           make(chan interface{}, configure.RTP_QUEUE_CHAN_SIZE),
@@ -180,7 +182,11 @@ func (q *queue) print() {
 }
 
 func (q *queue) Close() {
+	delete(app.keySsrcMap, q.ChannelKey)
+	delete(app.RtpQueueMap, q.Ssrc)
 	if q.flvFile != nil {
 		q.flvFile.Close()
 	}
+	CloseQuic()
+	fmt.Println("stream closed ssrc = ", q.Ssrc)
 }

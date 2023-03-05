@@ -84,18 +84,19 @@ type Publisher struct {
 	audio_speed       uint64
 }
 
-func UpdatePublishers(publishers map[uint32]*Publisher) {
+func UpdatePublishers() map[uint32]*Publisher {
+	newPublishers := make(map[uint32]*Publisher) //清空map
 
 	res := Get(configure.API_URL + "/stat/livestat")
 	if res == nil {
-		return
+		return nil
 	}
 	pubs := res["data"].(map[string]interface{})["publishers"].([]interface{})
 
 	for _, pub := range pubs {
 		p := pub.(map[string]interface{})
 
-		publishers[uint32(p["ssrc"].(float64))] = &Publisher{
+		newPublishers[uint32(p["ssrc"].(float64))] = &Publisher{
 			Key:               p["key"].(string),
 			url:               p["url"].(string),
 			Ssrc:              uint32(p["ssrc"].(float64)),
@@ -106,6 +107,7 @@ func UpdatePublishers(publishers map[uint32]*Publisher) {
 			audio_speed:       uint64(p["audio_speed"].(float64)),
 		}
 	}
+	return newPublishers
 }
 func CreateFlvFile(name string) *File {
 	flvFile, err := CreateFile(configure.RECORD_DIR + "/" + name + ".flv")

@@ -11,7 +11,8 @@ import (
 
 // var Conn = initQuic()
 var lock sync.Mutex
-var Conn *conn
+
+//var Conn *conn
 
 func initQuic() *conn {
 	tlsConf := &tls.Config{InsecureSkipVerify: true,
@@ -24,6 +25,13 @@ func initQuic() *conn {
 	return conn
 }
 
+func CloseQuic() {
+	app.quicConn.dataStream.Close()
+	app.quicConn.infoStream.Close()
+	app.quicConn = nil
+	fmt.Println("conn closed")
+}
+
 func GetByQuic(q *queue, seq uint16) {
 	lock.Lock() //防止多条流同时调用重传导致出错
 	defer lock.Unlock()
@@ -32,17 +40,17 @@ func GetByQuic(q *queue, seq uint16) {
 		return
 	}
 
-	if Conn == nil {
-		Conn = initQuic()
+	if app.quicConn == nil {
+		app.quicConn = initQuic()
 	}
 	// run the client
 	// 根据序列号请求
-	_, err := Conn.WriteSsrc(q.Ssrc)
-	_, err = Conn.WriteSeq(uint16(seq))
+	_, err := app.quicConn.WriteSsrc(q.Ssrc)
+	_, err = app.quicConn.WriteSeq(uint16(seq))
 
 	//读rtp数据
 	var pkt *rtp.RtpPack
-	err = Conn.ReadRtp(&pkt)
+	err = app.quicConn.ReadRtp(&pkt)
 	if err != nil {
 		//没有该包的缓存
 		fmt.Println("错误，quic无法获取包,序号：", seq)

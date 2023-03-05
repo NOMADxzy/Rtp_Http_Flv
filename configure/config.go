@@ -25,7 +25,7 @@ func init() {
 	flag.BoolVar(&DISABLE_QUIC, "disable_quic", false, "enable quic service")
 	flag.IntVar(&RTP_QUEUE_CHAN_SIZE, "queue_chan_size", 100, "rtp queue chan size")
 	flag.StringVar(&RECORD_DIR, "record_dir", "./record", "stream record dir")
-	flag.Float64Var(&PACKET_LOSS_RATE, "pack_loss", 0.000, "the rate to loss some packets")
+	flag.Float64Var(&PACKET_LOSS_RATE, "pack_loss", 0.002, "the rate to loss some packets")
 
 	flag.Usage = usage
 }
