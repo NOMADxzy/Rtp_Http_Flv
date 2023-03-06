@@ -1,14 +1,12 @@
 package main
 
 import (
-	"flag"
+	"Rtp_Http_Flv/configure"
 	"log"
 	"net"
 	"net/http"
 	"strings"
 )
-
-var httpFlvAddr = flag.String("httpflv-addr", ":7001", "HTTP-FLV server listen address")
 
 type Server struct {
 	//FLVWriterMap map[string]*FLVWriter
@@ -67,7 +65,7 @@ func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
 	writer.Wait()
 }
 func startHTTPFlv() *Server {
-	flvListen, err := net.Listen("tcp", *httpFlvAddr)
+	flvListen, err := net.Listen("tcp", configure.HTTP_FLV_ADDR)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -79,7 +77,7 @@ func startHTTPFlv() *Server {
 				log.Println("HTTP-FLV server panic: ", r)
 			}
 		}()
-		log.Println("HTTP-FLV listen On", *httpFlvAddr)
+		log.Println("HTTP-FLV listen On", configure.HTTP_FLV_ADDR)
 		hdlServer.Serve(flvListen)
 	}()
 	return hdlServer

@@ -14,6 +14,7 @@ var (
 	DISABLE_QUIC                  bool
 	RTP_QUEUE_CHAN_SIZE           int
 	PACKET_LOSS_RATE              float64
+	HTTP_FLV_ADDR                 string
 )
 
 func init() {
@@ -26,6 +27,7 @@ func init() {
 	flag.IntVar(&RTP_QUEUE_CHAN_SIZE, "queue_chan_size", 100, "rtp queue chan size")
 	flag.StringVar(&RECORD_DIR, "record_dir", "./record", "stream record dir")
 	flag.Float64Var(&PACKET_LOSS_RATE, "pack_loss", 0.002, "the rate to loss some packets")
+	flag.StringVar(&HTTP_FLV_ADDR, "httpflv_addr", ":7001", "HTTP-FLV server listen address")
 
 	flag.Usage = usage
 }
