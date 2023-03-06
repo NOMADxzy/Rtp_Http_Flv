@@ -3,7 +3,7 @@ package rtp
 import (
 	"fmt"
 
-	"rtp_http_flv/parser/ps"
+	"Rtp_Http_Flv/parser/ps"
 )
 
 type RtpPack struct {

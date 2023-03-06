@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"rtp_http_flv/container/ps"
+	"Rtp_Http_Flv/container/ps"
 )
 
 type Parser struct {

@@ -1,6 +1,6 @@
 package rtmp
 
-import "rtp_http_flv/protocol/rtmp/core"
+import "Rtp_Http_Flv/protocol/rtmp/core"
 
 const (
 	PUBLISH = "publish"

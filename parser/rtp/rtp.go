@@ -3,7 +3,7 @@ package rtp
 import (
 	"encoding/binary"
 
-	"rtp_http_flv/container/rtp"
+	"Rtp_Http_Flv/container/rtp"
 )
 
 type Parser struct {

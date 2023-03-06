@@ -1,0 +1,10 @@
+//启动边缘节点
+./main -httpflv-addr :7001 -udp_addr 127.0.0.1:5222 -pack_loss 0.002 -disable_quic
+./main -httpflv-addr :7002 -udp_addr 127.0.0.1:5224 -pack_loss 0.002
+
+//启动云端节点
+./cloudserver
+
+//推流到云端
+ffmpeg -re -i caton.mp4 -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie
+ffmpeg -re -i xigua.mp4 -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/foobar

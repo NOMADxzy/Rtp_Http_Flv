@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"github.com/gwuhaolin/livego/av"
 	"log"
 	"net"
 	"net/http"
@@ -12,7 +11,6 @@ import (
 var httpFlvAddr = flag.String("httpflv-addr", ":7001", "HTTP-FLV server listen address")
 
 type Server struct {
-	handler av.Handler
 	//FLVWriterMap map[string]*FLVWriter
 }
 
@@ -26,10 +24,8 @@ type streams struct {
 	Players    []stream `json:"players"`
 }
 
-func NewServer(h av.Handler) *Server {
-	return &Server{
-		handler: h,
-	}
+func NewServer() *Server {
+	return &Server{}
 }
 
 func (server *Server) Serve(l net.Listener) error {
@@ -76,7 +72,7 @@ func startHTTPFlv() *Server {
 		log.Fatal(err)
 	}
 
-	hdlServer := NewServer(nil)
+	hdlServer := NewServer()
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
