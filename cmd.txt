@@ -11,3 +11,7 @@ go build main.go conn.go cache.go quic_client.go RtpQueue.go server.go writer.go
 //推流到云端
 ffmpeg -re -i caton.mp4 -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie
 ffmpeg -re -i drive360.mp4 -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/foobar
+
+//客户端播放
+http://127.0.0.1:7001/live/movie.flv
+http://127.0.0.1:7002/live/movie.flv

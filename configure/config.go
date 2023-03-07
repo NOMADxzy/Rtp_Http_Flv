@@ -22,7 +22,7 @@ func init() {
 	flag.StringVar(&API_URL, "api_url", "http://127.0.0.1:8090", "http api server addr")
 	flag.StringVar(&UDP_SOCKET_ADDR, "udp_addr", "127.0.0.1:5222", "udp listen addr")
 	flag.StringVar(&QUIC_ADDR, "quic_addr", "localhost:4242", "quic server addr")
-	flag.IntVar(&RTP_QUEUE_PADDING_WINDOW_SIZE, "padding_size", 1000, "rtp queue window")
+	flag.IntVar(&RTP_QUEUE_PADDING_WINDOW_SIZE, "padding_size", 300, "rtp queue window")
 	flag.BoolVar(&DISABLE_QUIC, "disable_quic", false, "enable quic service")
 	flag.IntVar(&RTP_QUEUE_CHAN_SIZE, "queue_chan_size", 100, "rtp queue chan size")
 	flag.StringVar(&RECORD_DIR, "record_dir", "./record", "stream record dir")
