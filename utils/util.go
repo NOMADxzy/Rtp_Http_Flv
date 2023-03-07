@@ -50,7 +50,8 @@ func Get(url string) map[string]interface{} {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		return nil
 	}
 	defer resp.Body.Close()
 	var buffer [512]byte
