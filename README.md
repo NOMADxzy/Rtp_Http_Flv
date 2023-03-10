@@ -55,25 +55,28 @@ Usage of ./Rtp_Http_Flv:
 
 
 ## 项目结构
-#### cache
+#### `cache`
 - `cache.go`：主要是缓存 flvTag 的初始段 initialization segment，通常包含在首个音频和视频的 Tag 中，包含了媒体的基本信息，例如编解码格式以及采样率等，播放器必须拿到才能正确解码播放视频
 - `RtpQueue.go`：用于缓存rtp包的队列，确保rtp包的有序和尽可能存在
 - `FlvRecord.go`：解析flvTag的缓存，记录历史信息，每得到一个完整的tag后都会重新开始
 
-#### configure
+#### `configure`
 - 配置文件
 
-#### container
+#### `container`
 - 一些协议的数据包格式，用来创建和解析不同协议的数据包
 
-#### protocol/httpflv
+#### `protocol/httpflv`
 - 提供httpflv服务的必要文件，向客户端传输数据包，主要数据结构是 flvWriter
 
-#### protocol/quic
+#### `protocol/quic`
 - quic 客户端，主要根据 sequence number 重传 rtp packet
 
+#### `utils`
+- tls、flv文件的读写、http请求等工具方法
 
-- `main.go`：主要代码逻辑，接收 rtp 数据, 解析、处理，提供http服务
+#### `main.go`
+- 主要代码逻辑，接收 rtp 数据, 解析、处理，提供http服务
 
 
 ### Todo

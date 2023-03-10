@@ -10,7 +10,7 @@ import (
 	"sync"
 )
 
-var QuicConn = initQuic()
+var QuicConn *Conn
 var lock sync.Mutex
 
 //var Conn *conn
@@ -26,12 +26,13 @@ func initQuic() *Conn {
 	return conn
 }
 
-func (quicConn *Conn) Close() {
-	err := quicConn.dataStream.Close()
+func CloseQuic() {
+
+	err := QuicConn.dataStream.Close()
 	utils.CheckError(err)
-	err = quicConn.infoStream.Close()
+	err = QuicConn.infoStream.Close()
 	utils.CheckError(err)
-	quicConn = nil
+	QuicConn = nil
 	fmt.Println("quic conn closed")
 }
 

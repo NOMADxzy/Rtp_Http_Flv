@@ -149,7 +149,7 @@ func (app *App) CheckAlive() {
 				delete(app.keySsrcMap, rtpQueue.ChannelKey)
 				delete(app.RtpQueueMap, rtpQueue.Ssrc)
 				rtpQueue.Close()
-				quic.QuicConn.Close()
+				quic.CloseQuic()
 			}
 		}
 	}
