@@ -1,4 +1,4 @@
-package main
+package httpflv
 
 import (
 	"Rtp_Http_Flv/configure"
@@ -8,7 +8,12 @@ import (
 	"strings"
 )
 
+type HttpHandler interface {
+	HandleNewFlvWriter(key string, writer *FLVWriter)
+}
+
 type Server struct {
+	httpHandler HttpHandler
 	//FLVWriterMap map[string]*FLVWriter
 }
 
@@ -22,8 +27,8 @@ type streams struct {
 	Players    []stream `json:"players"`
 }
 
-func NewServer() *Server {
-	return &Server{}
+func NewServer(handler HttpHandler) *Server {
+	return &Server{httpHandler: handler}
 }
 
 func (server *Server) Serve(l net.Listener) error {
@@ -61,16 +66,16 @@ func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
 	writer := NewFLVWriter(paths[0], paths[1], url, w)
 
 	//server.handler.HandleWriter(writer)
-	HandleNewFlvWriter(path, writer)
+	server.httpHandler.HandleNewFlvWriter(path, writer)
 	writer.Wait()
 }
-func startHTTPFlv() *Server {
+func StartHTTPFlv(handler HttpHandler) *Server {
 	flvListen, err := net.Listen("tcp", configure.HTTP_FLV_ADDR)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	hdlServer := NewServer()
+	hdlServer := NewServer(handler)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {

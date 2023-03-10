@@ -1,7 +1,8 @@
-package main
+package cache
 
 import (
 	"Rtp_Http_Flv/container/flv"
+	"Rtp_Http_Flv/protocol/httpflv"
 	"Rtp_Http_Flv/utils"
 )
 
@@ -15,7 +16,7 @@ func (segmentPacket *SegmentPacket) Write(p *flv.Packet) {
 	segmentPacket.full = true
 }
 
-func (segmentPacket *SegmentPacket) Send(w *FLVWriter) error {
+func (segmentPacket *SegmentPacket) Send(w *httpflv.FLVWriter) error {
 	if !segmentPacket.full {
 		return nil
 	}
@@ -64,7 +65,7 @@ func (cache *SegmentCache) Write(p *flv.Packet) {
 	}
 }
 
-func (cache *SegmentCache) SendInitialSegment(w *FLVWriter) error {
+func (cache *SegmentCache) SendInitialSegment(w *httpflv.FLVWriter) error {
 	if err := cache.metadata.Send(w); err != nil {
 		return err
 	}

@@ -1,4 +1,4 @@
-package main
+package httpflv
 
 import (
 	"Rtp_Http_Flv/utils"
@@ -17,11 +17,11 @@ type FLVWriter struct {
 	Uid             string
 	app, title, url string
 	buf             []byte
-	closed          bool
+	Closed          bool
 	closedChan      chan struct{}
 	ctx             http.ResponseWriter
 	packetQueue     chan []byte
-	init            bool
+	Init            bool
 }
 
 func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
@@ -44,7 +44,7 @@ func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
 		err := ret.SendPacket()
 		if err != nil {
 			log.Println("SendPacket error:", err)
-			ret.closed = true
+			ret.Closed = true
 		}
 	}()
 	return ret
@@ -52,7 +52,7 @@ func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
 
 func (flvWriter *FLVWriter) Write(p []byte) (err error) {
 	err = nil
-	if flvWriter.closed {
+	if flvWriter.Closed {
 		err = errors.New("flvwrite source closed")
 		return
 	}
@@ -106,11 +106,11 @@ func (flvWriter *FLVWriter) Wait() {
 
 func (flvWriter *FLVWriter) Close(error) {
 	log.Println("http flv closed")
-	if !flvWriter.closed {
+	if !flvWriter.Closed {
 		close(flvWriter.packetQueue)
 		close(flvWriter.closedChan)
 	}
-	flvWriter.closed = true
+	flvWriter.Closed = true
 }
 
 type Info struct {
