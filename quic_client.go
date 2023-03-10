@@ -3,6 +3,7 @@ package main
 import (
 	"Rtp_Http_Flv/configure"
 	"Rtp_Http_Flv/container/rtp"
+	"Rtp_Http_Flv/utils"
 	"crypto/tls"
 	"fmt"
 	"github.com/quic-go/quic-go"
@@ -26,10 +27,12 @@ func initQuic() *conn {
 }
 
 func CloseQuic() {
-	app.quicConn.dataStream.Close()
-	app.quicConn.infoStream.Close()
+	err := app.quicConn.dataStream.Close()
+	utils.CheckError(err)
+	err = app.quicConn.infoStream.Close()
+	utils.CheckError(err)
 	app.quicConn = nil
-	fmt.Println("conn closed")
+	fmt.Println("quic conn closed")
 }
 
 func GetByQuic(q *queue, seq uint16) {
@@ -53,11 +56,11 @@ func GetByQuic(q *queue, seq uint16) {
 	err = app.quicConn.ReadRtp(&pkt)
 	if err != nil {
 		//没有该包的缓存
-		fmt.Println("错误，quic无法获取包,序号：", seq)
+		fmt.Println("err，quic can not get packet, seq：", seq)
 		return
 	}
 	if pkt == nil {
-		fmt.Println("错误，quic收到一个空包")
+		fmt.Println("err，quic received a nil packet")
 	} else {
 		q.Enqueue(pkt)
 		fmt.Printf("quic收到rtp包，Seq:\t %v \n", pkt.SequenceNumber)

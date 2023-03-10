@@ -2,6 +2,7 @@ package main
 
 import (
 	"Rtp_Http_Flv/configure"
+	"Rtp_Http_Flv/container/flv"
 	"Rtp_Http_Flv/container/rtp"
 	"Rtp_Http_Flv/parser"
 	"Rtp_Http_Flv/utils"
@@ -202,7 +203,10 @@ func extractFlv(protoRp interface{}, rtpQueue *queue) error {
 		//将flv数据发送到该流下的所有客户端
 		//保存流的initialSegment发送到客户端才能播放
 		if !rtpQueue.cache.full {
-			rtpQueue.cache.Write(record.flvTag)
+			p := &flv.Packet{}
+			p.Parse(record.flvTag)
+
+			rtpQueue.cache.Write(p)
 		}
 		for i := 0; i < rtpQueue.flvWriters.Size(); i++ {
 			val, f := rtpQueue.flvWriters.Get(i)

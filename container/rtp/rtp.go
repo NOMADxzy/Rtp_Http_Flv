@@ -2,8 +2,7 @@ package rtp
 
 import (
 	"fmt"
-
-	"Rtp_Http_Flv/parser/ps"
+	//"Rtp_Http_Flv/parser/ps"
 )
 
 type RtpPack struct {
@@ -26,7 +25,7 @@ func (rtp *RtpPack) RealData() []byte {
 	switch rtp.PayloadType {
 	case 96:
 		// PS 格式
-		buff = ps.GetPsPayload(rtp.Payload)
+		//buff = ps.GetPsPayload(rtp.Payload)
 	case 97:
 		// todo 未实现：MPEG-4 格式
 	case 98:

@@ -159,7 +159,7 @@ func (q *queue) Check() int { //检查窗口内队列Rtp的存在性和有序性
 	for i := 0; i < q.PaddingWindowSize; i++ {
 		rp, _ := q.queue.Get(i)
 		if rp == nil {
-			fmt.Println("packet lost seq = ", int(q.FirstSeq)+i, ", ssrc = ", q.Ssrc, "run quic request")
+			fmt.Println("packet lost seq = ", q.FirstSeq+uint16(i), ", ssrc = ", q.Ssrc, "run quic request")
 			GetByQuic(q, q.FirstSeq+uint16(i))
 			re_trans += 1
 		}
