@@ -4,12 +4,13 @@ import (
 	"Rtp_Http_Flv/configure"
 	"Rtp_Http_Flv/container/flv"
 	"Rtp_Http_Flv/container/rtp"
+	"Rtp_Http_Flv/protocol/hls"
 	"Rtp_Http_Flv/protocol/httpflv"
 	"Rtp_Http_Flv/protocol/quic"
-
 	"Rtp_Http_Flv/utils"
 	"errors"
 	"fmt"
+	"github.com/NOMADxzy/livego/av"
 	"github.com/emirpasic/gods/lists/arraylist"
 	"sync"
 )
@@ -35,12 +36,17 @@ type Queue struct {
 	init              bool
 	flvRecord         *FlvRecord      //解析flv结构
 	FlvWriters        *arraylist.List //http-flv对象
-	flvFile           *utils.File     //录制文件
+	hlsWriter         *hls.Source
+	flvFile           *utils.File //录制文件
 	cache             *SegmentCache
 	accPackets        int //记录收到包的数量
 }
 
 func NewQueue(ssrc uint32, key string, wz int, record *FlvRecord, flvFile *utils.File) *Queue {
+	var hlsWriter *hls.Source
+	if configure.ENABLE_HLS { //选择是否开启hls服务
+		hlsWriter = hls.GetWriter(key)
+	}
 	return &Queue{
 		queue:             arraylist.New(),
 		PaddingWindowSize: wz,
@@ -51,6 +57,7 @@ func NewQueue(ssrc uint32, key string, wz int, record *FlvRecord, flvFile *utils
 		outChan:           make(chan interface{}, configure.RTP_QUEUE_CHAN_SIZE),
 		InChan:            make(chan interface{}, configure.RTP_QUEUE_CHAN_SIZE),
 		FlvWriters:        arraylist.New(),
+		hlsWriter:         hlsWriter,
 		cache:             NewCache(),
 	}
 }
@@ -155,7 +162,7 @@ func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
 		//保存流的initialSegment发送到客户端才能播放
 		if !rtpQueue.cache.full {
 			p := &flv.Packet{}
-			p.Parse(record.flvTag)
+			p.Parse(record.flvTag, false)
 
 			rtpQueue.cache.Write(p)
 		}
@@ -171,13 +178,19 @@ func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
 						if err != nil {
 							return err
 						}
-						writer.Write(record.flvTag)
 						writer.Init = true
-					} else {
-						writer.Write(record.flvTag)
 					}
+					err := writer.Write(record.flvTag)
+					utils.CheckError(err)
 				}
 			}
+		}
+		//发送到hlsServer中
+		if rtpQueue.hlsWriter != nil {
+			p := &av.Packet{}
+			p.Parse(record.flvTag, true)
+			err := rtpQueue.hlsWriter.Write(p)
+			utils.CheckError(err)
 		}
 
 		//录制到文件中
@@ -237,10 +250,10 @@ func (q *Queue) Enqueue(rp *rtp.RtpPack) {
 
 func (q *Queue) Dequeue() interface{} { //必须确保paddingsize内的rtp包已到达
 	//确保窗口内的包都存在
-	rp, _ := q.queue.Get(q.PaddingWindowSize)
+	rp, _ := q.queue.Get(0)
 	if rp == nil {
 		//重传
-		seq := q.FirstSeq + uint16(q.PaddingWindowSize)
+		seq := q.FirstSeq
 		fmt.Println("packet lost seq = ", seq, ", ssrc = ", q.Ssrc, "run quic request")
 		pkt := quic.GetByQuic(q.Ssrc, seq)
 		q.Enqueue(pkt)

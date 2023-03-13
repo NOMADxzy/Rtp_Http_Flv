@@ -2,6 +2,8 @@ package configure
 
 import (
 	"flag"
+	"fmt"
+	"os"
 )
 
 var (
@@ -15,6 +17,7 @@ var (
 	RTP_QUEUE_CHAN_SIZE           int
 	PACKET_LOSS_RATE              float64
 	HTTP_FLV_ADDR                 string
+	ENABLE_HLS                    bool
 )
 
 func init() {
@@ -28,6 +31,7 @@ func init() {
 	flag.StringVar(&RECORD_DIR, "record_dir", "./record", "stream record dir")
 	flag.Float64Var(&PACKET_LOSS_RATE, "pack_loss", 0.002, "the rate to loss some packets")
 	flag.StringVar(&HTTP_FLV_ADDR, "httpflv_addr", ":7001", "HTTP-FLV server listen address")
+	flag.BoolVar(&ENABLE_HLS, "enable_hls", true, "enable hls service")
 
 	flag.Usage = usage
 }
@@ -42,11 +46,21 @@ func usage() {
 }
 
 func GetFlag() bool {
-	flag.Parse()
-	if h {
+	flag.Parse() //获取参数
+	if h {       //打印帮助
 		flag.Usage()
 		return false
 	}
+	//创建录制文件夹
+	_, err := os.Stat(RECORD_DIR)
+	if os.IsNotExist(err) {
+		err := os.Mkdir(RECORD_DIR, os.ModePerm)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("Create record dir - ", RECORD_DIR)
+	}
+
 	return true
 }
 
