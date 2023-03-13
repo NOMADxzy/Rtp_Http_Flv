@@ -12,6 +12,7 @@
 - [RTP](https://www.rfc-editor.org/rfc/rfc3550.html)
 - [QUIC](https://datatracker.ietf.org/doc/html/rfc9000)
 - [HTTP-FLV](https://ossrs.io/lts/en-us/docs/v4/doc/delivery-http-flv)
+- [HLS](https://www.rfc-editor.org/rfc/pdfrfc/rfc8216.txt.pdf)
 
 ## 安装
 
@@ -19,7 +20,7 @@
 [Releases](https://github.com/NOMADxzy/Rtp_Http_Flv/releases)
 #### 从源码编译
 1. 下载源码 `https://github.com/NOMADxzy/Rtp_Http_Flv.git`
-2. 去 Rtp_Http_Flv 目录中 执行 `go build`
+2. 去 Rtp_Http_Flv 目录中 执行 `go build -o edgeserver.exe`
 
 ## 使用
 
@@ -27,11 +28,14 @@
 `./cloudserver`
 
 #### 2. 启动边缘节点，接收云端节点发过来的rtp流，并提供httpflv服务
-`./Rtp_Http_Flv -httpflv_addr :7002 -udp_addr 127.0.0.1:5222 -pack_loss 0.002`
+`./edgeserver -httpflv_addr :7001 -hls_addr :7002 -udp_addr 127.0.0.1:5222 -pack_loss 0.002`
 
 #### 3. 使用`ffmpeg`等工具推流到云端节点，命令`ffmpeg -re -i caton.mp4 -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie`
 
-#### 4. 启动[flv.js播放器](http://bilibili.github.io/flv.js/demo/)，输入播放地址播放：`http://127.0.0.1:7001/live/movie.flv`
+#### 4. 通过以下方式播放
+[flv 播放器](http://bilibili.github.io/flv.js/demo/)，输入播放地址播放：`http://127.0.0.1:7001/live/movie.flv` <br>
+
+[hls 播放器](http://players.akamai.com/players/hlsjs)，输入播放地址播放：`http://127.0.0.1:7002/live/movie.m3u8`
 
 
 
@@ -41,7 +45,7 @@
 ./Rtp_Http_Flv -h
 Usage of ./Rtp_Http_Flv:
   -api_url string       云端节点http服务的接口("http://127.0.0.1:8090")
-  -udp_addr string      监听udp的端口("127.0.0.1:5222")
+  -udp_addr string      监听udp的端口(":5222")
   -quic_addr string     云端节点quic服务的地址("127.0.0.1:4242")
   -httpflv_addr string  提供httpflv服务的地址(":7001")
   -disable_quic bool    是否停用quic重传(false)
@@ -49,7 +53,8 @@ Usage of ./Rtp_Http_Flv:
   -queue_chan_size int  流的写入写出缓冲长度(100)
   -record_dir string    录制文件的存放目录("./record")
   -pack_loss float64    模拟丢包率(0.002)
-
+  -enable_hls bool      开启hls服务(true)
+  -hls_addr   string    hls服务地址(":7002")
 ```
 
 

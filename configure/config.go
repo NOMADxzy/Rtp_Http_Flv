@@ -18,13 +18,14 @@ var (
 	PACKET_LOSS_RATE              float64
 	HTTP_FLV_ADDR                 string
 	ENABLE_HLS                    bool
+	HLS_ADDR                      string
 )
 
 func init() {
 	flag.BoolVar(&h, "h", false, "this help")
 	flag.StringVar(&API_URL, "api_url", "http://127.0.0.1:8090", "http api server addr")
-	flag.StringVar(&UDP_SOCKET_ADDR, "udp_addr", "127.0.0.1:5222", "udp listen addr")
-	flag.StringVar(&QUIC_ADDR, "quic_addr", "localhost:4242", "quic server addr")
+	flag.StringVar(&UDP_SOCKET_ADDR, "udp_addr", ":5222", "udp listen addr")
+	flag.StringVar(&QUIC_ADDR, "quic_addr", "127.0.0.1:4242", "quic server addr")
 	flag.IntVar(&RTP_QUEUE_PADDING_WINDOW_SIZE, "padding_size", 300, "rtp queue window")
 	flag.BoolVar(&DISABLE_QUIC, "disable_quic", false, "enable quic service")
 	flag.IntVar(&RTP_QUEUE_CHAN_SIZE, "queue_chan_size", 100, "rtp queue chan size")
@@ -32,6 +33,7 @@ func init() {
 	flag.Float64Var(&PACKET_LOSS_RATE, "pack_loss", 0.002, "the rate to loss some packets")
 	flag.StringVar(&HTTP_FLV_ADDR, "httpflv_addr", ":7001", "HTTP-FLV server listen address")
 	flag.BoolVar(&ENABLE_HLS, "enable_hls", true, "enable hls service")
+	flag.StringVar(&HLS_ADDR, "hls_addr", ":7002", "HLS server listen address")
 
 	flag.Usage = usage
 }

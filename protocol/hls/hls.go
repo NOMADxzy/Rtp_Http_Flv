@@ -1,8 +1,9 @@
 package hls
 
 import (
+	"Rtp_Http_Flv/configure"
+	"Rtp_Http_Flv/utils"
 	"fmt"
-	"github.com/NOMADxzy/livego/configure"
 	"net"
 	"net/http"
 	"path"
@@ -53,18 +54,15 @@ func (server *Server) Serve(listener net.Listener) error {
 	})
 	server.listener = listener
 
-	if configure.Config.GetBool("use_hls_https") {
-		http.ServeTLS(listener, mux, "server.crt", "server.key")
-	} else {
-		http.Serve(listener, mux)
-	}
+	err := http.Serve(listener, mux)
+	utils.CheckError(err)
 
 	return nil
 }
 
 func GetWriter(key string) *Source {
 	if hlsServer == nil {
-		hlsServer = StartHls()
+		StartHls()
 	}
 
 	var s *Source
@@ -93,7 +91,7 @@ func (server *Server) checkStop() {
 
 		server.conns.Range(func(key, val interface{}) bool {
 			v := val.(*Source)
-			if !v.Alive() && !configure.Config.GetBool("hls_keep_after_end") {
+			if !v.Alive() {
 				server.conns.Delete(key)
 			}
 			return true
@@ -172,20 +170,17 @@ func (server *Server) parseTs(pathstr string) (key string, err error) {
 }
 
 func StartHls() *Server {
-	hlsAddr := configure.Config.GetString("hls_addr")
-	hlsListen, err := net.Listen("tcp", hlsAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
+	hlsListen, err := net.Listen("tcp", configure.HLS_ADDR)
+	utils.CheckError(err)
 
-	hlsServer := NewServer()
+	hlsServer = NewServer()
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Error("HLS server panic: ", r)
 			}
 		}()
-		log.Info("HLS listen On ", hlsAddr)
+		log.Info("HLS listen On ", configure.HLS_ADDR)
 		hlsServer.Serve(hlsListen)
 	}()
 	return hlsServer

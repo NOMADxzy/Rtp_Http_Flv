@@ -94,7 +94,7 @@ func (myHttpHandler *MyHttpHandler) HandleNewFlvWriter(key string, flvWriter *ht
 
 func receiveRtp() {
 
-	addr, err := net.ResolveUDPAddr("udp4", configure.UDP_SOCKET_ADDR)
+	addr, err := net.ResolveUDPAddr("udp4", "127.0.0.1"+configure.UDP_SOCKET_ADDR)
 	if err != nil {
 		panic(err)
 	}
