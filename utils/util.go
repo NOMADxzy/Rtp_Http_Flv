@@ -146,3 +146,8 @@ func PutI32BE(b []byte, v int32) {
 	b[2] = byte(v >> 8)
 	b[3] = byte(v)
 }
+func CheckError(err error) {
+	if err != nil {
+		panic(err)
+	}
+}

@@ -1,115 +1,179 @@
 package flv
 
 import (
-	"bytes"
-	"encoding/binary"
-
-	"Rtp_Http_Flv/utils"
+	"fmt"
 )
 
-type TagPacket struct {
-	TagType     TagPackType // Tag Type , 8 : audio , 9 : video , 18 : script data
-	TagDataSize uint32      // 3 字节表示 Tag Data 大小
-	Ts          uint32      // 3 字节表示 Tag 时间戳
-	TsEx        byte        // 时间戳扩展位
-	StreamId    uint32      // 一直为0
-
-	Payload TagData
+type flvTag struct {
+	fType     uint8
+	dataSize  uint32
+	timeStamp uint32
+	streamID  uint32 // always 0
 }
 
-func NewTagPacket(tagType TagPackType) *TagPacket {
-	tagPack := &TagPacket{
-		TagType:     tagType,
-		TagDataSize: 0,
-		Ts:          0,
-		TsEx:        0,
-		StreamId:    0,
+type mediaTag struct {
+	/*
+		SoundFormat: UB[4]
+		0 = Linear PCM, platform endian
+		1 = ADPCM
+		2 = MP3
+		3 = Linear PCM, little endian
+		4 = Nellymoser 16-kHz mono
+		5 = Nellymoser 8-kHz mono
+		6 = Nellymoser
+		7 = G.711 A-law logarithmic PCM
+		8 = G.711 mu-law logarithmic PCM
+		9 = reserved
+		10 = AAC
+		11 = Speex
+		14 = MP3 8-Khz
+		15 = Device-specific sound
+		Formats 7, 8, 14, and 15 are reserved for internal use
+		AAC is supported in Flash Player 9,0,115,0 and higher.
+		Speex is supported in Flash Player 10 and higher.
+	*/
+	soundFormat uint8
+
+	/*
+		SoundRate: UB[2]
+		Sampling rate
+		0 = 5.5-kHz For AAC: always 3
+		1 = 11-kHz
+		2 = 22-kHz
+		3 = 44-kHz
+	*/
+	soundRate uint8
+
+	/*
+		SoundSize: UB[1]
+		0 = snd8Bit
+		1 = snd16Bit
+		Size of each sample.
+		This parameter only pertains to uncompressed formats.
+		Compressed formats always decode to 16 bits internally
+	*/
+	soundSize uint8
+
+	/*
+		SoundType: UB[1]
+		0 = sndMono
+		1 = sndStereo
+		Mono or stereo sound For Nellymoser: always 0
+		For AAC: always 1
+	*/
+	soundType uint8
+
+	/*
+		0: AAC sequence header
+		1: AAC raw
+	*/
+	aacPacketType uint8
+
+	/*
+		1: keyframe (for AVC, a seekable frame)
+		2: inter frame (for AVC, a non- seekable frame)
+		3: disposable inter frame (H.263 only)
+		4: generated keyframe (reserved for server use only)
+		5: video info/command frame
+	*/
+	frameType uint8
+
+	/*
+		1: JPEG (currently unused)
+		2: Sorenson H.263
+		3: Screen video
+		4: On2 VP6
+		5: On2 VP6 with alpha channel
+		6: Screen video version 2
+		7: AVC
+	*/
+	codecID uint8
+
+	/*
+		0: AVC sequence header
+		1: AVC NALU
+		2: AVC end of sequence (lower level NALU sequence ender is not required or supported)
+	*/
+	avcPacketType uint8
+
+	compositionTime int32
+}
+
+type Tag struct {
+	flvt   flvTag
+	mediat mediaTag
+}
+
+func (tag *Tag) SoundFormat() uint8 {
+	return tag.mediat.soundFormat
+}
+
+func (tag *Tag) AACPacketType() uint8 {
+	return tag.mediat.aacPacketType
+}
+
+func (tag *Tag) IsKeyFrame() bool {
+	return tag.mediat.frameType == FRAME_KEY
+}
+
+func (tag *Tag) IsSeq() bool {
+	return tag.mediat.frameType == FRAME_KEY &&
+		tag.mediat.avcPacketType == AVC_SEQHDR
+}
+
+func (tag *Tag) CodecID() uint8 {
+	return tag.mediat.codecID
+}
+
+func (tag *Tag) CompositionTime() int32 {
+	return tag.mediat.compositionTime
+}
+
+// ParseMediaTagHeader, parse video, audio, tag header
+func (tag *Tag) ParseMediaTagHeader(b []byte, isVideo bool) (n int, err error) {
+	switch isVideo {
+	case false:
+		n, err = tag.parseAudioHeader(b)
+	case true:
+		n, err = tag.parseVideoHeader(b)
 	}
+	return
+}
 
-	switch tagType {
-	case TAG_TYPE_AUDIO:
-		//
-	case TAG_TYPE_VIDEO:
-		tagPack.Payload = NewAvcVideoPacket()
-	case TAG_TYPE_SCRIPT:
-		tagPack.Payload = NewMetaTagData()
+func (tag *Tag) parseAudioHeader(b []byte) (n int, err error) {
+	if len(b) < n+1 {
+		err = fmt.Errorf("invalid audiodata len=%d", len(b))
+		return
 	}
-
-	return tagPack
+	flags := b[0]
+	tag.mediat.soundFormat = flags >> 4
+	tag.mediat.soundRate = (flags >> 2) & 0x3
+	tag.mediat.soundSize = (flags >> 1) & 0x1
+	tag.mediat.soundType = flags & 0x1
+	n++
+	switch tag.mediat.soundFormat {
+	case SOUND_AAC:
+		tag.mediat.aacPacketType = b[1]
+		n++
+	}
+	return
 }
 
-func (packet *TagPacket) IsAudio() bool {
-	return packet.TagType == TAG_TYPE_AUDIO
-}
-
-func (packet *TagPacket) IsVideo() bool {
-	return packet.TagType == TAG_TYPE_VIDEO
-}
-
-func (packet *TagPacket) IsMetadata() bool {
-	return packet.TagType == TAG_TYPE_SCRIPT
-}
-
-func (packet *TagPacket) SetTagDataSize(val uint32) {
-	packet.TagDataSize = val
-}
-
-func (packet *TagPacket) SetPayload(data TagData) {
-	packet.SetTagDataSize(uint32(data.ToTagBuffer().Len()))
-	packet.Payload = data
-}
-
-func (packet *TagPacket) Bytes() []byte {
-	buff := make([]byte, 0)
-	// header
-	buff = append(buff, byte(packet.TagType))
-	buff = append(buff, utils.UintToBytes(uint(packet.Payload.ToTagBuffer().Len()), 3)...)
-	buff = append(buff, utils.UintToBytes(uint(packet.Ts), 3)...)
-	buff = append(buff, packet.TsEx)
-	buff = append(buff, utils.UintToBytes(uint(packet.StreamId), 3)...)
-	// payload
-	buff = append(buff, packet.Payload.ToTagBuffer().Bytes()...)
-	// tag size
-	tagSize := uint32(len(buff))
-	tagSizeBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(tagSizeBytes, tagSize)
-	buff = append(buff, tagSizeBytes...)
-
-	return buff
-}
-
-// Timestamp + TimestampExtended
-// 组成了这个TAG包数据的PTS信息，真正数据的PTS = Timestamp | TimestampExtended << 24
-func (packet *TagPacket) Pts() uint32 {
-	return packet.Ts | uint32(packet.TsEx<<24)
-}
-
-// ===============================================
-//					Tag Data
-// ===============================================
-
-type TagData interface {
-	ToTagBuffer() *bytes.Buffer
-}
-
-// Video Tag Data
-type VideoTagData interface {
-	TagData
-	IsKeyFrame() bool
-	IsSeq() bool
-	CodecId() uint8
-	CompositionTime() uint32
-}
-
-// Audio Tag Data
-type AudioTagData interface {
-	TagData
-	SoundFormat() uint8
-	AACPacketType() uint8
-}
-
-// Script Tag Data
-type MetaTagData interface {
-	TagData
-	Init()
+func (tag *Tag) parseVideoHeader(b []byte) (n int, err error) {
+	if len(b) < n+5 {
+		err = fmt.Errorf("invalid videodata len=%d", len(b))
+		return
+	}
+	flags := b[0]
+	tag.mediat.frameType = flags >> 4
+	tag.mediat.codecID = flags & 0xf
+	n++
+	if tag.mediat.frameType == FRAME_INTER || tag.mediat.frameType == FRAME_KEY {
+		tag.mediat.avcPacketType = b[1]
+		for i := 2; i < 5; i++ {
+			tag.mediat.compositionTime = tag.mediat.compositionTime<<8 + int32(b[i])
+		}
+		n += 4
+	}
+	return
 }

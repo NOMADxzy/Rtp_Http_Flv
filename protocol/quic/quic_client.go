@@ -1,20 +1,21 @@
-package main
+package quic
 
 import (
 	"Rtp_Http_Flv/configure"
 	"Rtp_Http_Flv/container/rtp"
+	"Rtp_Http_Flv/utils"
 	"crypto/tls"
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"sync"
 )
 
-// var Conn = initQuic()
+var QuicConn *Conn
 var lock sync.Mutex
 
 //var Conn *conn
 
-func initQuic() *conn {
+func initQuic() *Conn {
 	tlsConf := &tls.Config{InsecureSkipVerify: true,
 		NextProtos: []string{"quic-echo-server"}}
 	protoconn, err := quic.DialAddr(configure.QUIC_ADDR, tlsConf, nil)
@@ -26,42 +27,46 @@ func initQuic() *conn {
 }
 
 func CloseQuic() {
-	app.quicConn.dataStream.Close()
-	app.quicConn.infoStream.Close()
-	app.quicConn = nil
-	fmt.Println("conn closed")
+
+	err := QuicConn.dataStream.Close()
+	utils.CheckError(err)
+	err = QuicConn.infoStream.Close()
+	utils.CheckError(err)
+	QuicConn = nil
+	fmt.Println("quic conn closed")
 }
 
-func GetByQuic(q *queue, seq uint16) {
+func GetByQuic(ssrc uint32, seq uint16) *rtp.RtpPack {
 	lock.Lock() //防止多条流同时调用重传导致出错
 	defer lock.Unlock()
 
 	if configure.DISABLE_QUIC {
-		return
+		return nil
 	}
 
-	if app.quicConn == nil {
-		app.quicConn = initQuic()
+	if QuicConn == nil {
+		QuicConn = initQuic()
 	}
 	// run the client
 	// 根据序列号请求
-	_, err := app.quicConn.WriteSsrc(q.Ssrc)
-	_, err = app.quicConn.WriteSeq(uint16(seq))
+	_, err := QuicConn.WriteSsrc(ssrc)
+	_, err = QuicConn.WriteSeq(uint16(seq))
 
 	//读rtp数据
 	var pkt *rtp.RtpPack
-	err = app.quicConn.ReadRtp(&pkt)
+	err = QuicConn.ReadRtp(&pkt)
 	if err != nil {
 		//没有该包的缓存
-		fmt.Println("错误，quic无法获取包,序号：", seq)
-		return
+		fmt.Println("err，quic can not get packet, seq：", seq)
+		return nil
 	}
 	if pkt == nil {
-		fmt.Println("错误，quic收到一个空包")
+		fmt.Println("err，quic received a nil packet")
 	} else {
-		q.Enqueue(pkt)
 		fmt.Printf("quic收到rtp包，Seq:\t %v \n", pkt.SequenceNumber)
+		return pkt
 	}
+	return nil
 	//fmt.Printf("buf:\t %v \n", pkt.buffer)
 	//fmt.Printf("ekt:\t %v \n", pkt.ekt)
 	//fmt.Println("buf len:", len(pkt.))

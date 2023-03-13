@@ -2,8 +2,8 @@
 go build main.go conn.go cache.go quic_client.go RtpQueue.go server.go writer.go
 
 //启动边缘节点
-./main -httpflv_addr :7001 -udp_addr 127.0.0.1:5222 -pack_loss 0.002 -disable_quic
-./main -httpflv_addr :7002 -udp_addr 127.0.0.1:5224 -pack_loss 0.002
+./Rtp_Http_Flv -httpflv_addr :7001 -udp_addr 127.0.0.1:5222 -pack_loss 0.002 -disable_quic
+./Rtp_Http_Flv -httpflv_addr :7002 -udp_addr 127.0.0.1:5224 -pack_loss 0.002
 
 //启动云端节点
 ./cloudserver
@@ -11,3 +11,13 @@ go build main.go conn.go cache.go quic_client.go RtpQueue.go server.go writer.go
 //推流到云端
 ffmpeg -re -i caton.mp4 -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie
 ffmpeg -re -i drive360.mp4 -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/foobar
+
+//推摄像头+麦克风
+ffmpeg  -f dshow -i audio="麦克风阵列 (英特尔® 智音技术)" -vcodec libx264 -preset:v ultrafast -tune:v zerolatency -f flv rtmp://127.0.0.1:1935/live/movie
+//推摄像头
+ffmpeg -f dshow -i video="Integrated Camera" -vcodec libx264 -preset:v ultrafast -tune:v zerolatency -f flv rtmp://127.0.0.1:1935/live/movie
+
+
+//客户端播放
+http://127.0.0.1:7001/live/movie.flv
+http://127.0.0.1:7002/live/movie.flv

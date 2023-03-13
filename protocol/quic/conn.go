@@ -1,4 +1,4 @@
-package main
+package quic
 
 import (
 	"Rtp_Http_Flv/container/rtp"
@@ -11,19 +11,19 @@ import (
 
 var rtpParser = parser.NewRtpParser()
 
-type conn struct {
+type Conn struct {
 	Connection quic.Connection
 	infoStream quic.Stream
 	dataStream quic.Stream
 }
 
-func newConn(sess quic.Connection, is_server bool) (*conn, error) {
+func newConn(sess quic.Connection, is_server bool) (*Conn, error) {
 	if is_server {
 		dstream, err := sess.OpenStream()
 		if err != nil {
 			return nil, err
 		}
-		return &conn{
+		return &Conn{
 			Connection: sess,
 			dataStream: dstream,
 		}, nil
@@ -32,7 +32,7 @@ func newConn(sess quic.Connection, is_server bool) (*conn, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &conn{
+		return &Conn{
 			Connection: sess,
 			infoStream: istream,
 		}, nil
@@ -42,7 +42,7 @@ func newConn(sess quic.Connection, is_server bool) (*conn, error) {
 //	func (c *conn) DataStream() quic.Stream {
 //		return c.dataStream
 //	}
-func (c *conn) ReadLen(len *uint16) error {
+func (c *Conn) ReadLen(len *uint16) error {
 	if c.infoStream == nil {
 		var err error
 		c.dataStream, err = c.Connection.AcceptStream(context.Background())
@@ -60,7 +60,7 @@ func (c *conn) ReadLen(len *uint16) error {
 	return nil
 	//return io.ReadFull(c.dataStream,b)
 }
-func (c *conn) ReadRtp(pkt **rtp.RtpPack) error {
+func (c *Conn) ReadRtp(pkt **rtp.RtpPack) error {
 	if c.dataStream == nil {
 		var err error
 		c.dataStream, err = c.Connection.AcceptStream(context.Background())
@@ -87,13 +87,13 @@ func (c *conn) ReadRtp(pkt **rtp.RtpPack) error {
 	return nil
 }
 
-func (c *conn) WriteSeq(seq uint16) (int, error) {
+func (c *Conn) WriteSeq(seq uint16) (int, error) {
 	seq_b := make([]byte, 2)
 	binary.BigEndian.PutUint16(seq_b, seq)
 	return c.infoStream.Write(seq_b)
 }
 
-func (c *conn) WriteSsrc(ssrc uint32) (int, error) {
+func (c *Conn) WriteSsrc(ssrc uint32) (int, error) {
 	ssrc_b := make([]byte, 4)
 	binary.BigEndian.PutUint32(ssrc_b, ssrc)
 	return c.infoStream.Write(ssrc_b)
