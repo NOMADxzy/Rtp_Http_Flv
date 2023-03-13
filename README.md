@@ -28,7 +28,7 @@
 `./cloudserver`
 
 #### 2. 启动边缘节点，接收云端节点发过来的rtp流，并提供httpflv服务
-`./edgeserver -httpflv_addr :7001 -hls_addr :7002 -udp_addr 127.0.0.1:5222 -pack_loss 0.002`
+`./edgeserver -httpflv_addr :7001 -hls_addr :7002 -udp_addr :5222 -pack_loss 0.002`
 
 #### 3. 使用`ffmpeg`等工具推流到云端节点，命令`ffmpeg -re -i caton.mp4 -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie`
 
