@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/quic-go/quic-go"
 )
 
@@ -13,35 +14,28 @@ var rtpParser = parser.NewRtpParser()
 
 type Conn struct {
 	Connection quic.Connection
-	infoStream quic.Stream
-	dataStream quic.Stream
+	infoStream quic.Stream // 存储请求信息，例如 sequence, ssrc
+	dataStream quic.Stream // 存储 rtp 数据包信息
 }
 
 func newConn(sess quic.Connection, is_server bool) (*Conn, error) {
+	quicStream, err := sess.OpenStream()
 	if is_server {
-		dstream, err := sess.OpenStream()
-		if err != nil {
-			return nil, err
-		}
-		return &Conn{
-			Connection: sess,
-			dataStream: dstream,
-		}, nil
-	} else {
-		istream, err := sess.OpenStream()
-		if err != nil {
-			return nil, err
-		}
-		return &Conn{
-			Connection: sess,
-			infoStream: istream,
-		}, nil
+		fmt.Print("This is quic server launched by cloudServer.\n")
 	}
+	if err != nil {
+		return nil, err
+	}
+	return &Conn{
+		Connection: sess,
+		infoStream: quicStream,
+	}, nil
 }
 
 //	func (c *conn) DataStream() quic.Stream {
 //		return c.dataStream
 //	}
+
 func (c *Conn) ReadLen(len *uint16) error {
 	if c.infoStream == nil {
 		var err error
@@ -58,8 +52,8 @@ func (c *Conn) ReadLen(len *uint16) error {
 	}
 	*len = binary.BigEndian.Uint16(len_b)
 	return nil
-	//return io.ReadFull(c.dataStream,b)
 }
+
 func (c *Conn) ReadRtp(pkt **rtp.RtpPack) error {
 	if c.dataStream == nil {
 		var err error
@@ -69,16 +63,16 @@ func (c *Conn) ReadRtp(pkt **rtp.RtpPack) error {
 			return err
 		}
 	}
-	var len uint16
+	var rtpLen uint16
 	//读buffer
-	err := c.ReadLen(&len)
+	err := c.ReadLen(&rtpLen)
 	if err != nil {
 		return err
 	}
-	if len == 0 {
+	if rtpLen == 0 {
 		return errors.New("RtpCacheNotFound")
 	}
-	buf := make([]byte, len)
+	buf := make([]byte, rtpLen)
 	_, err = c.dataStream.Read(buf)
 	if err != nil {
 		panic(err)

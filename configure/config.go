@@ -23,6 +23,7 @@ var (
 
 func init() {
 	flag.BoolVar(&h, "h", false, "this help")
+	//flag.StringVar(&API_URL, "api_url", "http://192.168.8.79:8090", "http api server addr")
 	flag.StringVar(&API_URL, "api_url", "http://127.0.0.1:8090", "http api server addr")
 	flag.StringVar(&UDP_SOCKET_ADDR, "udp_addr", ":5222", "udp listen addr")
 	flag.StringVar(&QUIC_ADDR, "quic_addr", "127.0.0.1:4242", "quic server addr")

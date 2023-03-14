@@ -3,49 +3,46 @@ package utils
 import (
 	"Rtp_Http_Flv/configure"
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"math/rand"
 	"net/http"
 	"time"
 )
 
-func UintToBytes(val uint, index int) []byte {
-	b := make([]byte, index)
-	for i := 0; i < index; i++ {
-		b[i] = byte(val >> (8 * (index - i - 1)))
-	}
-	return b
-}
+//func UintToBytes(val uint, index int) []byte {
+//	b := make([]byte, index)
+//	for i := 0; i < index; i++ {
+//		b[i] = byte(val >> (8 * (index - i - 1)))
+//	}
+//	return b
+//}
 
-func Float64ToByte(float float64) []byte {
-	bits := math.Float64bits(float)
-	bytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bytes, bits)
+//func Float64ToByte(float float64) []byte {
+//	bits := math.Float64bits(float)
+//	Bytes := make([]byte, 8)
+//	binary.LittleEndian.PutUint64(Bytes, bits)
+//
+//	return Bytes
+//}
 
-	return bytes
-}
+// BytesToUint32 返回 uint32
+//func BytesToUint32(val []byte) uint32 {
+//	return uint32(val[0]<<24) + uint32(val[1]<<16) + uint32(val[2]<<8) + uint32(val[3])
+//}
 
-// 返回 uint32
-func BytesToUint32(val []byte) uint32 {
-	return uint32(val[0]<<24) + uint32(val[1]<<16) + uint32(val[2]<<8) + uint32(val[3])
-}
+//func AmfStringToBytes(b *bytes.Buffer, val string) {
+//	b.Write(UintToBytes(uint(len(val)), 2))
+//	b.Write([]byte(val))
+//}
 
-func AmfStringToBytes(b *bytes.Buffer, val string) {
-	b.Write(UintToBytes(uint(len(val)), 2))
-	b.Write([]byte(val))
-}
-
-func AmfDoubleToBytes(b *bytes.Buffer, val float64) {
-	b.WriteByte(0x00)
-	b.Write(Float64ToByte(val))
-}
+//func AmfDoubleToBytes(b *bytes.Buffer, val float64) {
+//	b.WriteByte(0x00)
+//	b.Write(Float64ToByte(val))
+//}
 
 func Get(url string) map[string]interface{} {
-
 	// 超时时间：5秒
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(url)
@@ -110,6 +107,7 @@ func UpdatePublishers() map[uint32]*Publisher {
 	}
 	return newPublishers
 }
+
 func CreateFlvFile(name string) *File {
 	flvFile, err := CreateFile(configure.RECORD_DIR + "/" + name + ".flv")
 	if err != nil {
@@ -146,6 +144,7 @@ func PutI32BE(b []byte, v int32) {
 	b[2] = byte(v >> 8)
 	b[3] = byte(v)
 }
+
 func CheckError(err error) {
 	if err != nil {
 		panic(err)

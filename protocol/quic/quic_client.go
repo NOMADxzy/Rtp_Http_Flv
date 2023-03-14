@@ -18,16 +18,15 @@ var lock sync.Mutex
 func initQuic() *Conn {
 	tlsConf := &tls.Config{InsecureSkipVerify: true,
 		NextProtos: []string{"quic-echo-server"}}
-	protoconn, err := quic.DialAddr(configure.QUIC_ADDR, tlsConf, nil)
+	protoConn, err := quic.DialAddr(configure.QUIC_ADDR, tlsConf, nil)
 	if err != nil {
 		panic(err)
 	}
-	conn, _ := newConn(protoconn, false)
+	conn, _ := newConn(protoConn, false)
 	return conn
 }
 
 func CloseQuic() {
-
 	err := QuicConn.dataStream.Close()
 	utils.CheckError(err)
 	err = QuicConn.infoStream.Close()

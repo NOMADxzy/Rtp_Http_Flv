@@ -17,15 +17,15 @@ type Server struct {
 	//FLVWriterMap map[string]*FLVWriter
 }
 
-type stream struct {
-	Key string `json:"key"`
-	Id  string `json:"id"`
-}
+//type stream struct {
+//	Key string `json:"key"`
+//	Id  string `json:"id"`
+//}
 
-type streams struct {
-	Publishers []stream `json:"publishers"`
-	Players    []stream `json:"players"`
-}
+//type streams struct {
+//	Publishers []stream `json:"publishers"`
+//	Players    []stream `json:"players"`
+//}
 
 func NewServer(handler HttpHandler) *Server {
 	return &Server{httpHandler: handler}
@@ -36,7 +36,10 @@ func (server *Server) Serve(l net.Listener) error {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		server.handleConn(w, r)
 	})
-	http.Serve(l, mux)
+	err := http.Serve(l, mux)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -69,6 +72,7 @@ func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
 	server.httpHandler.HandleNewFlvWriter(path, writer)
 	writer.Wait()
 }
+
 func StartHTTPFlv(handler HttpHandler) *Server {
 	flvListen, err := net.Listen("tcp", configure.HTTP_FLV_ADDR)
 	if err != nil {
@@ -83,7 +87,10 @@ func StartHTTPFlv(handler HttpHandler) *Server {
 			}
 		}()
 		log.Println("HTTP-FLV listen On", configure.HTTP_FLV_ADDR)
-		hdlServer.Serve(flvListen)
+		err = hdlServer.Serve(flvListen)
+		if err != nil {
+			return
+		}
 	}()
 	return hdlServer
 }
