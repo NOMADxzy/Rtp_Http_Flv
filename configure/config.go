@@ -8,7 +8,8 @@ import (
 
 var (
 	h                             bool
-	API_URL                       string
+	CLOUD_HOST                    string
+	API_ADDR                      string
 	UDP_SOCKET_ADDR               string
 	QUIC_ADDR                     string
 	RECORD_DIR                    string
@@ -19,14 +20,16 @@ var (
 	HTTP_FLV_ADDR                 string
 	ENABLE_HLS                    bool
 	HLS_ADDR                      string
+	ENABLE_RECORD                 bool
 )
 
 func init() {
 	flag.BoolVar(&h, "h", false, "this help")
-	flag.StringVar(&API_URL, "api_url", "http://127.0.0.1:8090", "http api server addr")
+	flag.StringVar(&CLOUD_HOST, "cloud_host", "127.0.0.1", "host of cloud server")
+	flag.StringVar(&API_ADDR, "api_addr", ":8090", "http api server addr")
 	flag.StringVar(&UDP_SOCKET_ADDR, "udp_addr", ":5222", "udp listen addr")
-	flag.StringVar(&QUIC_ADDR, "quic_addr", "127.0.0.1:4242", "quic server addr")
-	flag.IntVar(&RTP_QUEUE_PADDING_WINDOW_SIZE, "padding_size", 300, "rtp queue window")
+	flag.StringVar(&QUIC_ADDR, "quic_addr", ":4242", "quic server addr")
+	flag.IntVar(&RTP_QUEUE_PADDING_WINDOW_SIZE, "padding_size", 100, "rtp queue window")
 	flag.BoolVar(&DISABLE_QUIC, "disable_quic", false, "enable quic service")
 	flag.IntVar(&RTP_QUEUE_CHAN_SIZE, "queue_chan_size", 100, "rtp queue chan size")
 	flag.StringVar(&RECORD_DIR, "record_dir", "./record", "stream record dir")
@@ -34,6 +37,7 @@ func init() {
 	flag.StringVar(&HTTP_FLV_ADDR, "httpflv_addr", ":7001", "HTTP-FLV server listen address")
 	flag.BoolVar(&ENABLE_HLS, "enable_hls", true, "enable hls service")
 	flag.StringVar(&HLS_ADDR, "hls_addr", ":7002", "HLS server listen address")
+	flag.BoolVar(&ENABLE_RECORD, "enable_record", true, "enable stream record")
 
 	flag.Usage = usage
 }
@@ -65,10 +69,3 @@ func GetFlag() bool {
 
 	return true
 }
-
-//func main() {
-//	flag.Parse()
-//	if h {
-//		flag.Usage()
-//	}
-//}

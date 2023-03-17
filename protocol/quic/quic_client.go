@@ -18,7 +18,7 @@ var lock sync.Mutex
 func initQuic() *Conn {
 	tlsConf := &tls.Config{InsecureSkipVerify: true,
 		NextProtos: []string{"quic-echo-server"}}
-	protoconn, err := quic.DialAddr(configure.QUIC_ADDR, tlsConf, nil)
+	protoconn, err := quic.DialAddr(configure.CLOUD_HOST+configure.QUIC_ADDR, tlsConf, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -50,14 +50,20 @@ func GetByQuic(ssrc uint32, seq uint16) *rtp.RtpPack {
 	// run the client
 	// 根据序列号请求
 	_, err := QuicConn.WriteSsrc(ssrc)
-	_, err = QuicConn.WriteSeq(uint16(seq))
+	if err != nil { //长时间未重传，导致服务关闭
+		fmt.Println(err)
+		QuicConn = initQuic()
+		_, err = QuicConn.WriteSsrc(ssrc)
+	}
+
+	_, err = QuicConn.WriteSeq(seq)
 
 	//读rtp数据
 	var pkt *rtp.RtpPack
 	err = QuicConn.ReadRtp(&pkt)
 	if err != nil {
 		//没有该包的缓存
-		fmt.Println("err，quic can not get packet, seq：", seq)
+		fmt.Println("quic err, can not get packet, seq：", seq)
 		return nil
 	}
 	if pkt == nil {

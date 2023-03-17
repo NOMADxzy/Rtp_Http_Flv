@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/quic-go/quic-go"
 )
 
@@ -18,25 +19,17 @@ type Conn struct {
 }
 
 func newConn(sess quic.Connection, is_server bool) (*Conn, error) {
+	quicStream, err := sess.OpenStream()
 	if is_server {
-		dstream, err := sess.OpenStream()
-		if err != nil {
-			return nil, err
-		}
-		return &Conn{
-			Connection: sess,
-			dataStream: dstream,
-		}, nil
-	} else {
-		istream, err := sess.OpenStream()
-		if err != nil {
-			return nil, err
-		}
-		return &Conn{
-			Connection: sess,
-			infoStream: istream,
-		}, nil
+		fmt.Print("This is quic server launched by cloudServer.\n")
 	}
+	if err != nil {
+		return nil, err
+	}
+	return &Conn{
+		Connection: sess,
+		infoStream: quicStream,
+	}, nil
 }
 
 //	func (c *conn) DataStream() quic.Stream {
@@ -69,16 +62,16 @@ func (c *Conn) ReadRtp(pkt **rtp.RtpPack) error {
 			return err
 		}
 	}
-	var len uint16
+	var length uint16
 	//读buffer
-	err := c.ReadLen(&len)
+	err := c.ReadLen(&length)
 	if err != nil {
 		return err
 	}
-	if len == 0 {
+	if length == 0 {
 		return errors.New("RtpCacheNotFound")
 	}
-	buf := make([]byte, len)
+	buf := make([]byte, length)
 	_, err = c.dataStream.Read(buf)
 	if err != nil {
 		panic(err)

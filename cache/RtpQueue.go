@@ -8,7 +8,6 @@ import (
 	"Rtp_Http_Flv/protocol/httpflv"
 	"Rtp_Http_Flv/protocol/quic"
 	"Rtp_Http_Flv/utils"
-	"errors"
 	"fmt"
 	"github.com/NOMADxzy/livego/av"
 	"github.com/emirpasic/gods/lists/arraylist"
@@ -29,7 +28,7 @@ type Queue struct {
 	Ssrc              uint32 //队列所属的流
 	ChannelKey        string
 	FirstSeq          uint16          //第一个Rtp包的序号
-	PaddingWindowSize int             //滑动窗口大小
+	PaddingWindowSize int             //i+PW个包到了，第i包还没到，则对i执行重传
 	queue             *arraylist.List //rtpPacket队列
 	outChan           chan interface{}
 	InChan            chan interface{}
@@ -62,7 +61,7 @@ func NewQueue(ssrc uint32, key string, wz int, record *FlvRecord, flvFile *utils
 	}
 }
 
-func (q *Queue) RecvPacket() error {
+func (q *Queue) RecvPacket() {
 	for {
 		p, ok := <-q.InChan
 		if ok {
@@ -74,8 +73,6 @@ func (q *Queue) RecvPacket() error {
 				protoRp := q.Dequeue()
 				q.outChan <- protoRp
 			}
-		} else {
-			return errors.New("closed")
 		}
 	}
 }
@@ -92,7 +89,7 @@ func (q *Queue) RecvPacket() error {
 //			}
 //		}
 //	}
-func (q *Queue) Play() error {
+func (q *Queue) Play() {
 	for {
 		protoRp, ok := <-q.outChan
 		if ok {
@@ -101,7 +98,7 @@ func (q *Queue) Play() error {
 				q.flvRecord.Reset()
 			}
 		} else {
-			return errors.New("closed")
+			return
 		}
 	}
 }
@@ -110,7 +107,7 @@ func (q *Queue) Play() error {
 func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
 	record := rtpQueue.flvRecord
 
-	if protoRp == nil { //该包丢失了
+	if protoRp == nil { //该包丢失
 		record.Reset()               //清空当前tag的缓存
 		record.jumpToNextHead = true //跳到下一个tag头开始解析
 		return nil
@@ -194,9 +191,9 @@ func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
 		}
 
 		//录制到文件中
-		err := rtpQueue.flvFile.WriteTagDirect(record.flvTag)
-		if err != nil {
-			return err
+		if rtpQueue.flvFile != nil {
+			err := rtpQueue.flvFile.WriteTagDirect(record.flvTag)
+			utils.CheckError(err)
 		}
 		//fmt.Println("rtp seq:", rp.SequenceNumber, ",payload size: ", len(flvTag), ",rtp timestamp: ", rp.Timestamp)
 
@@ -226,7 +223,7 @@ func (q *Queue) Enqueue(rp *rtp.RtpPack) {
 			if int(q.FirstSeq-seq) > 60000 { //序列号到头
 				relative = 65536 - int(q.FirstSeq) + int(seq)
 			} else { //过时的包
-				fmt.Println("过时的包 ", seq, " ", q.FirstSeq)
+				fmt.Println("useless packet seq: ", seq, ", firstSeq: ", q.FirstSeq)
 				return
 			}
 		} else {
@@ -248,36 +245,36 @@ func (q *Queue) Enqueue(rp *rtp.RtpPack) {
 
 }
 
-func (q *Queue) Dequeue() interface{} { //必须确保paddingsize内的rtp包已到达
-	//确保窗口内的包都存在
+func (q *Queue) runQuic(seq uint16) {
+	fmt.Println("packet lost seq = ", seq, ", ssrc = ", q.Ssrc, "run quic request")
+	pkt := quic.GetByQuic(q.Ssrc, seq)
+	q.Enqueue(pkt)
+}
+
+func (q *Queue) Dequeue() interface{} {
+	//检测要取的包是否存在，不在则重传
 	rp, _ := q.queue.Get(0)
 	if rp == nil {
 		//重传
-		seq := q.FirstSeq
-		fmt.Println("packet lost seq = ", seq, ", ssrc = ", q.Ssrc, "run quic request")
-		pkt := quic.GetByQuic(q.Ssrc, seq)
-		q.Enqueue(pkt)
-		//q.queue.Set(i, pkt)
+		q.runQuic(q.FirstSeq)
 	}
 
-	var res interface{}
-	res, _ = q.queue.Get(0)
+	var protoRp interface{}
+	protoRp, _ = q.queue.Get(0)
 	q.m.Lock()
 	q.queue.Remove(0)
 	q.FirstSeq += 1
 	q.m.Unlock()
-	return res
+	return protoRp
 }
 
-func (q *Queue) Check() int { //检查窗口内队列Rtp的存在性和有序性
+func (q *Queue) Check() int { //检查窗口内队列Rtp的存在
 	re_trans := 0
 	//rtpParser := parser.NewRtpParser()
 	for i := 0; i < q.PaddingWindowSize; i++ {
 		rp, _ := q.queue.Get(i)
 		if rp == nil {
-			fmt.Println("packet lost seq = ", q.FirstSeq+uint16(i), ", ssrc = ", q.Ssrc, "run quic request")
-			pkt := quic.GetByQuic(q.Ssrc, q.FirstSeq+uint16(i))
-			q.Enqueue(pkt)
+			q.runQuic(q.FirstSeq + uint16(i))
 			re_trans += 1
 		}
 	}

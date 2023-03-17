@@ -10,6 +10,7 @@ import (
 	"Rtp_Http_Flv/utils"
 	"fmt"
 	"github.com/emirpasic/gods/lists/arraylist"
+	"github.com/q191201771/pprofplus/pprofplus/pkg/pprofplus"
 	"net"
 	"strings"
 	"time"
@@ -41,11 +42,15 @@ func main() {
 		flvFiles:    arraylist.New(), //用于关闭打开的文件具柄
 	}
 
-	go app.CheckAlive()
+	err := pprofplus.Start() //内存监测
+	utils.CheckError(err)
+
+	go app.CheckAlive() //检验流是否关闭
 
 	myHttpHandler := &MyHttpHandler{}
-	httpflv.StartHTTPFlv(myHttpHandler)
-	receiveRtp()
+	httpflv.StartHTTPFlv(myHttpHandler) //开启httpflv服务
+
+	receiveRtp() //收rtp包
 }
 
 func handleNewStream(ssrc uint32) *cache.Queue {
@@ -61,8 +66,14 @@ func handleNewStream(ssrc uint32) *cache.Queue {
 	channel := strings.SplitN(key, "/", 2)[1] //文件名
 
 	flvRecord := cache.NewFlvRecord()
-	flvFile := utils.CreateFlvFile(channel)
-	app.flvFiles.Add(flvFile)
+
+	var flvFile *utils.File
+	if configure.ENABLE_RECORD {
+		fmt.Println("Create record file path = ", configure.RECORD_DIR, "/", channel+".flv")
+		flvFile := utils.CreateFlvFile(channel)
+		app.flvFiles.Add(flvFile)
+	}
+
 	rtpQueue := cache.NewQueue(ssrc, key, configure.RTP_QUEUE_PADDING_WINDOW_SIZE, flvRecord, flvFile)
 	app.RtpQueueMap[ssrc] = rtpQueue
 
@@ -79,7 +90,6 @@ func handleNewPacket(rp *rtp.RtpPack) {
 	}
 
 	//Rtp包顺序存放到队列中
-	//rtpQueue.Enqueue(rp)
 	rtpQueue.InChan <- rp
 
 }
@@ -94,7 +104,7 @@ func (myHttpHandler *MyHttpHandler) HandleNewFlvWriter(key string, flvWriter *ht
 
 func receiveRtp() {
 
-	addr, err := net.ResolveUDPAddr("udp4", "127.0.0.1"+configure.UDP_SOCKET_ADDR)
+	addr, err := net.ResolveUDPAddr("udp4", "0.0.0.0"+configure.UDP_SOCKET_ADDR)
 	if err != nil {
 		panic(err)
 	}
@@ -113,28 +123,24 @@ func receiveRtp() {
 		}
 	}()
 
-	go func() { //接受rtp协程
-		for {
-			//读udp数据
-			buff := make([]byte, 2*1024)
-			//num, err := conn.Read(buff)
-			num, _, err := conn.ReadFromUDP(buff)
-			if err != nil || utils.IsPacketLoss() {
-				continue
-			}
-
-			//解析为rtp包
-			data := buff[:num]
-			rtpParser := parser.NewRtpParser()
-			rp := rtpParser.Parse(data)
-			if rp == nil {
-				continue
-			}
-			handleNewPacket(rp)
+	for {
+		//读udp数据
+		buff := make([]byte, 2*1024)
+		//num, err := conn.Read(buff)
+		num, _, err := conn.ReadFromUDP(buff)
+		if err != nil || utils.IsPacketLoss() {
+			continue
 		}
-	}()
 
-	time.Sleep(time.Hour)
+		//解析为rtp包
+		data := buff[:num]
+		rtpParser := parser.NewRtpParser()
+		rp := rtpParser.Parse(data)
+		if rp == nil {
+			continue
+		}
+		handleNewPacket(rp)
+	}
 
 }
 

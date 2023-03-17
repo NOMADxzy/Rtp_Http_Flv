@@ -30,7 +30,7 @@
 #### 2. 启动边缘节点，接收云端节点发过来的rtp流，并提供httpflv服务
 `./edgeserver -httpflv_addr :7001 -hls_addr :7002 -udp_addr :5222 -pack_loss 0.002`
 
-#### 3. 使用`ffmpeg`等工具推流到云端节点，命令`ffmpeg -re -i caton.mp4 -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie`
+#### 3. 使用`ffmpeg`等工具推流到云端节点，命令: <br>`ffmpeg -re -i caton.mp4 -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie`
 
 #### 4. 通过以下方式播放
 [flv 播放器](http://bilibili.github.io/flv.js/demo/)，输入播放地址播放：`http://127.0.0.1:7001/live/movie.flv` <br>
@@ -44,9 +44,10 @@
 ```bash
 ./Rtp_Http_Flv -h
 Usage of ./Rtp_Http_Flv:
-  -api_url string       云端节点http服务的接口("http://127.0.0.1:8090")
+  -cloud_host           云端节点ip地址("127.0.0.1") 
+  -api_addr string      云端节点http服务的地址(":8090")
   -udp_addr string      监听udp的端口(":5222")
-  -quic_addr string     云端节点quic服务的地址("127.0.0.1:4242")
+  -quic_addr string     云端节点quic服务的地址(":4242")
   -httpflv_addr string  提供httpflv服务的地址(":7001")
   -disable_quic bool    是否停用quic重传(false)
   -padding_size int     rtp队列的缓冲长度(300)
@@ -55,6 +56,7 @@ Usage of ./Rtp_Http_Flv:
   -pack_loss float64    模拟丢包率(0.002)
   -enable_hls bool      开启hls服务(true)
   -hls_addr   string    hls服务地址(":7002")
+  -enable_record bool   启动直播录制(false )
 ```
 
 

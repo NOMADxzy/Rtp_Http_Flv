@@ -3,57 +3,24 @@ package utils
 import (
 	"Rtp_Http_Flv/configure"
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"math/rand"
 	"net/http"
 	"time"
 )
-
-func UintToBytes(val uint, index int) []byte {
-	b := make([]byte, index)
-	for i := 0; i < index; i++ {
-		b[i] = byte(val >> (8 * (index - i - 1)))
-	}
-	return b
-}
-
-func Float64ToByte(float float64) []byte {
-	bits := math.Float64bits(float)
-	bytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bytes, bits)
-
-	return bytes
-}
-
-// 返回 uint32
-func BytesToUint32(val []byte) uint32 {
-	return uint32(val[0]<<24) + uint32(val[1]<<16) + uint32(val[2]<<8) + uint32(val[3])
-}
-
-func AmfStringToBytes(b *bytes.Buffer, val string) {
-	b.Write(UintToBytes(uint(len(val)), 2))
-	b.Write([]byte(val))
-}
-
-func AmfDoubleToBytes(b *bytes.Buffer, val float64) {
-	b.WriteByte(0x00)
-	b.Write(Float64ToByte(val))
-}
 
 func Get(url string) map[string]interface{} {
 
 	// 超时时间：5秒
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(url)
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
-	defer resp.Body.Close()
+	CheckError(err)
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		CheckError(err)
+	}(resp.Body)
 	var buffer [512]byte
 	result := bytes.NewBuffer(nil)
 	for {
@@ -67,7 +34,8 @@ func Get(url string) map[string]interface{} {
 	}
 
 	var res map[string]interface{}
-	json.Unmarshal(result.Bytes(), &res)
+	err = json.Unmarshal(result.Bytes(), &res)
+	CheckError(err)
 	if res["data"].(map[string]interface{})["publishers"] == nil {
 		return nil
 	}
@@ -88,7 +56,7 @@ type Publisher struct {
 func UpdatePublishers() map[uint32]*Publisher {
 	newPublishers := make(map[uint32]*Publisher) //清空map
 
-	res := Get(configure.API_URL + "/stat/livestat")
+	res := Get("http://" + configure.CLOUD_HOST + configure.API_ADDR + "/stat/livestat")
 	if res == nil {
 		return nil
 	}
@@ -132,8 +100,8 @@ func IsTagHead(payload []byte) bool {
 }
 
 func IsPacketLoss() bool {
-	r := rand.Intn(1000)
-	if float64(r)/1000.0 >= configure.PACKET_LOSS_RATE {
+	r := rand.Intn(10000)
+	if float64(r)/10000.0 >= configure.PACKET_LOSS_RATE {
 		return false
 	} else {
 		return true
