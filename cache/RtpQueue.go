@@ -38,7 +38,9 @@ type Queue struct {
 	hlsWriter         *hls.Source
 	flvFile           *utils.File //录制文件
 	cache             *SegmentCache
-	accPackets        int //记录收到包的数量
+	accPackets        int    //记录收到包的数量
+	accLoss           int    //记录丢失包的数量
+	previousLostSeq   uint16 //三个连续的丢包说明发生了拥塞，去除队列前所有的nil，跳到下个有效包开始解析
 }
 
 func NewQueue(ssrc uint32, key string, wz int, record *FlvRecord, flvFile *utils.File) *Queue {
@@ -81,15 +83,11 @@ func (q *Queue) RecvPacket() {
 				if q.queue.Size() <= 1 {
 					break //最少保留一个包在队列中，否则入队列时无法计算相对位置
 				}
-				if protoRp, ok := q.queue.Get(0); ok { //窗口内的一直取到空包位置处为止
-					if protoRp != nil {
-						protoRp := q.Dequeue()
-						err := q.extractFlv(protoRp)
-						if err != nil {
-							q.flvRecord.Reset()
-						}
-					} else { //遇到空包后跳出，等待队列到达窗口大小时还没到在执行上面的for循环中的重传
-						break
+				if q.isFirstOk() { //窗口内的一直取到空包位置处为止
+					protoRp := q.Dequeue()
+					err := q.extractFlv(protoRp)
+					if err != nil {
+						q.flvRecord.Reset()
 					}
 				}
 				break
@@ -98,18 +96,6 @@ func (q *Queue) RecvPacket() {
 	}
 }
 
-//	func (q *queue) Play() {
-//		for {
-//			protoRp := q.Dequeue()
-//			err := extractFlv(protoRp, q)
-//			if err != nil {
-//				q.flvRecord.Reset()
-//			}
-//			if q.queue.Size() <= q.PaddingWindowSize {
-//				break
-//			}
-//		}
-//	}
 func (q *Queue) Play() {
 	for {
 		protoRp, ok := <-q.outChan
@@ -122,6 +108,100 @@ func (q *Queue) Play() {
 			return
 		}
 	}
+}
+
+func (q *Queue) Enqueue(rp *rtp.RtpPack) {
+	q.m.Lock()
+	defer q.m.Unlock()
+
+	if rp == nil {
+		return
+	}
+
+	q.accPackets += 1
+
+	seq := rp.SequenceNumber
+	if q.queue.Size() == 0 { //队列中还没有元素
+		q.FirstSeq = seq
+		q.queue.Add(rp)
+	} else {
+		var relative int
+		if utils.FirstBeforeSecond(seq, q.FirstSeq) {
+			fmt.Println("useless packet seq: ", seq, ", firstSeq: ", q.FirstSeq)
+			return
+		} else {
+			if seq > q.FirstSeq {
+				relative = int(seq - q.FirstSeq)
+			} else {
+				relative = int(uint16(65535) - q.FirstSeq + seq + uint16(1))
+			}
+
+			if relative <= q.queue.Size() { //没到队列终点
+				q.queue.Set(relative, rp)
+			} else {
+				for i := q.queue.Size(); i <= relative; i++ {
+					if i != relative {
+						q.queue.Set(i, nil)
+						continue
+					}
+					q.queue.Set(i, rp)
+				}
+			}
+		}
+		//if q.FirstSeq > seq {
+		//	if int(q.FirstSeq-seq) > 60000 { //序列号到头
+		//		relative = 65536 - int(q.FirstSeq) + int(seq)
+		//	} else { //过时的包
+		//		fmt.Println("useless packet seq: ", seq, ", firstSeq: ", q.FirstSeq)
+		//		return
+		//	}
+		//} else {
+		//	relative = int(seq - q.FirstSeq)
+		//}
+		//if relative <= q.queue.Size() { //没到队列终点
+		//	q.queue.Set(relative, rp)
+		//} else {
+		//	for i := q.queue.Size(); i <= relative; i++ {
+		//		if i != relative {
+		//			q.queue.Set(i, nil)
+		//			continue
+		//		}
+		//		q.queue.Set(i, rp)
+		//	}
+		//}
+
+	}
+
+}
+
+func (q *Queue) runQuic(seq uint16) {
+	q.accLoss += 1
+
+	if seq == q.previousLostSeq+uint16(1) {
+		fmt.Printf("[warning] Continuous packet loss, reshaping queue, %d packets removed\n", q.reshape())
+		q.flvRecord.Reset()
+		q.flvRecord.jumpToNextHead = true
+	}
+	fmt.Println("packet lost seq = ", seq, ", ssrc = ", q.Ssrc, "run quic request")
+	pkt := quic.GetByQuic(q.Ssrc, seq)
+
+	q.previousLostSeq = seq
+	q.Enqueue(pkt)
+}
+
+func (q *Queue) Dequeue() interface{} {
+	//检测要取的包是否存在，不在则重传
+	if !q.isFirstOk() {
+		//重传
+		q.runQuic(q.FirstSeq)
+	}
+
+	protoRp, _ := q.queue.Get(0)
+	q.m.Lock()
+	q.queue.Remove(0)
+	q.FirstSeq += 1
+	q.m.Unlock()
+	return protoRp
 }
 
 // 从rtp包中提取出flvTag，根据record信息组合分片，debug打印调试信息
@@ -224,93 +304,6 @@ func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
 	return nil
 }
 
-func (q *Queue) Enqueue(rp *rtp.RtpPack) {
-	q.m.Lock()
-	defer q.m.Unlock()
-
-	if rp == nil {
-		return
-	}
-
-	q.accPackets += 1
-
-	seq := rp.SequenceNumber
-	if q.queue.Size() == 0 { //队列中还没有元素
-		q.FirstSeq = seq
-		q.queue.Add(rp)
-	} else {
-		var relative int
-		if utils.FirstBeforeSecond(seq, q.FirstSeq) {
-			fmt.Println("useless packet seq: ", seq, ", firstSeq: ", q.FirstSeq)
-			return
-		} else {
-			if seq > q.FirstSeq {
-				relative = int(seq - q.FirstSeq)
-			} else {
-				relative = int(uint16(65535) - q.FirstSeq + seq + uint16(1))
-			}
-
-			if relative <= q.queue.Size() { //没到队列终点
-				q.queue.Set(relative, rp)
-			} else {
-				for i := q.queue.Size(); i <= relative; i++ {
-					if i != relative {
-						q.queue.Set(i, nil)
-						continue
-					}
-					q.queue.Set(i, rp)
-				}
-			}
-		}
-		//if q.FirstSeq > seq {
-		//	if int(q.FirstSeq-seq) > 60000 { //序列号到头
-		//		relative = 65536 - int(q.FirstSeq) + int(seq)
-		//	} else { //过时的包
-		//		fmt.Println("useless packet seq: ", seq, ", firstSeq: ", q.FirstSeq)
-		//		return
-		//	}
-		//} else {
-		//	relative = int(seq - q.FirstSeq)
-		//}
-		//if relative <= q.queue.Size() { //没到队列终点
-		//	q.queue.Set(relative, rp)
-		//} else {
-		//	for i := q.queue.Size(); i <= relative; i++ {
-		//		if i != relative {
-		//			q.queue.Set(i, nil)
-		//			continue
-		//		}
-		//		q.queue.Set(i, rp)
-		//	}
-		//}
-
-	}
-
-}
-
-func (q *Queue) runQuic(seq uint16) {
-	fmt.Println("packet lost seq = ", seq, ", ssrc = ", q.Ssrc, "run quic request")
-	pkt := quic.GetByQuic(q.Ssrc, seq)
-	q.Enqueue(pkt)
-}
-
-func (q *Queue) Dequeue() interface{} {
-	//检测要取的包是否存在，不在则重传
-	rp, _ := q.queue.Get(0)
-	if rp == nil {
-		//重传
-		q.runQuic(q.FirstSeq)
-	}
-
-	var protoRp interface{}
-	protoRp, _ = q.queue.Get(0)
-	q.m.Lock()
-	q.queue.Remove(0)
-	q.FirstSeq += 1
-	q.m.Unlock()
-	return protoRp
-}
-
 func (q *Queue) Check() int { //检查窗口内队列Rtp的存在
 	re_trans := 0
 	//rtpParser := parser.NewRtpParser()
@@ -323,6 +316,38 @@ func (q *Queue) Check() int { //检查窗口内队列Rtp的存在
 	}
 	return re_trans
 }
+
+func (q *Queue) isFirstOk() bool {
+	if rp, ok := q.queue.Get(0); ok {
+		if rp != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func (q *Queue) reshape() int {
+	q.m.Lock()
+	defer q.m.Unlock()
+
+	removed := 0
+	if val, ok := q.queue.Get(1); ok {
+		if val == nil { //三个连续的丢包
+			quic.GetByQuic(q.Ssrc, q.FirstSeq+1) //让云端知道丢了三个连续包
+			for {
+				q.queue.Remove(0)
+				q.FirstSeq += 1
+				q.accLoss += 1
+				removed += 1
+				if q.isFirstOk() {
+					return removed
+				}
+			}
+		}
+	}
+	return 0
+}
+
 func (q *Queue) print() {
 	fmt.Println("rtp队列长度：", q.queue.Size())
 	fmt.Print("rtp队列：")

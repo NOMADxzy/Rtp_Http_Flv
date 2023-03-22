@@ -19,7 +19,7 @@
 #### 使用预编译的可执行文件
 [Releases](https://github.com/NOMADxzy/Rtp_Http_Flv/releases)
 #### 从源码编译
-1. 下载源码 `https://github.com/NOMADxzy/Rtp_Http_Flv.git`
+1. 下载源码`https://github.com/NOMADxzy/Rtp_Http_Flv.git`
 2. 去 Rtp_Http_Flv 目录中 执行 `go build -o edgeserver.exe`
 
 ## 使用
@@ -28,7 +28,7 @@
 `./cloudserver`
 
 #### 2. 启动边缘节点，接收云端节点发过来的rtp流，并提供httpflv服务
-`./edgeserver -httpflv_addr :7001 -hls_addr :7002 -udp_addr :5222 -pack_loss 0.002`
+`./edgeserver -udp_addr :5222 -pack_loss 0.002`
 
 #### 3. 使用`ffmpeg`等工具推流到云端节点，命令: <br>`ffmpeg -re -i caton.mp4 -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie`
 

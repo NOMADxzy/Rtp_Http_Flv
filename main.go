@@ -123,22 +123,29 @@ func receiveRtp() {
 		}
 	}()
 
+	rtpParser := parser.NewRtpParser()
+
 	for {
 		//读udp数据
 		buff := make([]byte, 2*1024)
 		//num, err := conn.Read(buff)
 		num, _, err := conn.ReadFromUDP(buff)
-		if err != nil || utils.IsPacketLoss() {
+		utils.CheckError(err)
+
+		if utils.IsPacketLoss() {
 			continue
 		}
 
 		//解析为rtp包
 		data := buff[:num]
-		rtpParser := parser.NewRtpParser()
 		rp := rtpParser.Parse(data)
-		if rp == nil {
-			continue
-		}
+
+		//fmt.Println("udp收到rtp----------序号：", rp.SequenceNumber)
+
+		//if lastSeq+uint16(1) != rp.SequenceNumber {
+		//	fmt.Println(lastSeq)
+		//}
+		//lastSeq = rp.SequenceNumber
 		handleNewPacket(rp)
 	}
 
