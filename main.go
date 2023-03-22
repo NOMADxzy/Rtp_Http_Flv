@@ -78,7 +78,7 @@ func handleNewStream(ssrc uint32) *cache.Queue {
 	app.RtpQueueMap[ssrc] = rtpQueue
 
 	go rtpQueue.RecvPacket()
-	go rtpQueue.Play()
+	//go rtpQueue.Play()
 	return rtpQueue
 }
 

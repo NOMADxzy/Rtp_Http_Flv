@@ -119,3 +119,11 @@ func CheckError(err error) {
 		panic(err)
 	}
 }
+
+func FirstBeforeSecond(seq1 uint16, seq2 uint16) bool {
+	if seq1 < seq2 {
+		return seq2-seq1 < uint16(60000)
+	} else {
+		return seq1-seq2 > uint16(60000)
+	}
+}

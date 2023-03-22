@@ -66,12 +66,33 @@ func (q *Queue) RecvPacket() {
 		p, ok := <-q.InChan
 		if ok {
 			q.Enqueue(p.(*rtp.RtpPack))
-			if q.accPackets == q.PaddingWindowSize {
-				q.Check()
-			}
-			for q.queue.Size() > q.PaddingWindowSize {
+			//if q.accPackets == q.PaddingWindowSize {
+			//	q.Check()
+			//}
+			for q.queue.Size() > q.PaddingWindowSize { //窗口外的必取，包括不存在的
 				protoRp := q.Dequeue()
-				q.outChan <- protoRp
+				//q.outChan <- protoRp
+				err := q.extractFlv(protoRp)
+				if err != nil {
+					q.flvRecord.Reset()
+				}
+			}
+			for {
+				if q.queue.Size() <= 1 {
+					break //最少保留一个包在队列中，否则入队列时无法计算相对位置
+				}
+				if protoRp, ok := q.queue.Get(0); ok { //窗口内的一直取到空包位置处为止
+					if protoRp != nil {
+						protoRp := q.Dequeue()
+						err := q.extractFlv(protoRp)
+						if err != nil {
+							q.flvRecord.Reset()
+						}
+					} else { //遇到空包后跳出，等待队列到达窗口大小时还没到在执行上面的for循环中的重传
+						break
+					}
+				}
+				break
 			}
 		}
 	}
@@ -219,27 +240,49 @@ func (q *Queue) Enqueue(rp *rtp.RtpPack) {
 		q.queue.Add(rp)
 	} else {
 		var relative int
-		if q.FirstSeq > seq {
-			if int(q.FirstSeq-seq) > 60000 { //序列号到头
-				relative = 65536 - int(q.FirstSeq) + int(seq)
-			} else { //过时的包
-				fmt.Println("useless packet seq: ", seq, ", firstSeq: ", q.FirstSeq)
-				return
+		if utils.FirstBeforeSecond(seq, q.FirstSeq) {
+			fmt.Println("useless packet seq: ", seq, ", firstSeq: ", q.FirstSeq)
+			return
+		} else {
+			if seq > q.FirstSeq {
+				relative = int(seq - q.FirstSeq)
+			} else {
+				relative = int(uint16(65535) - q.FirstSeq + seq + uint16(1))
 			}
-		} else {
-			relative = int(seq - q.FirstSeq)
-		}
-		if relative <= q.queue.Size() { //没到队列终点
-			q.queue.Set(relative, rp)
-		} else {
-			for i := q.queue.Size(); i <= relative; i++ {
-				if i != relative {
-					q.queue.Set(i, nil)
-					continue
+
+			if relative <= q.queue.Size() { //没到队列终点
+				q.queue.Set(relative, rp)
+			} else {
+				for i := q.queue.Size(); i <= relative; i++ {
+					if i != relative {
+						q.queue.Set(i, nil)
+						continue
+					}
+					q.queue.Set(i, rp)
 				}
-				q.queue.Set(i, rp)
 			}
 		}
+		//if q.FirstSeq > seq {
+		//	if int(q.FirstSeq-seq) > 60000 { //序列号到头
+		//		relative = 65536 - int(q.FirstSeq) + int(seq)
+		//	} else { //过时的包
+		//		fmt.Println("useless packet seq: ", seq, ", firstSeq: ", q.FirstSeq)
+		//		return
+		//	}
+		//} else {
+		//	relative = int(seq - q.FirstSeq)
+		//}
+		//if relative <= q.queue.Size() { //没到队列终点
+		//	q.queue.Set(relative, rp)
+		//} else {
+		//	for i := q.queue.Size(); i <= relative; i++ {
+		//		if i != relative {
+		//			q.queue.Set(i, nil)
+		//			continue
+		//		}
+		//		q.queue.Set(i, rp)
+		//	}
+		//}
 
 	}
 
