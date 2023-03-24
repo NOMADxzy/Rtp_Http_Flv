@@ -14,9 +14,12 @@ import (
 func Get(url string) map[string]interface{} {
 
 	// 超时时间：5秒
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
-	CheckError(err)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		CheckError(err)
@@ -45,6 +48,7 @@ func Get(url string) map[string]interface{} {
 type Publisher struct {
 	Key               string
 	url               string
+	StartTime         int64
 	Ssrc              uint32
 	id                uint32
 	video_total_bytes uint64
@@ -68,6 +72,7 @@ func UpdatePublishers() map[uint32]*Publisher {
 		newPublishers[uint32(p["ssrc"].(float64))] = &Publisher{
 			Key:               p["key"].(string),
 			url:               p["url"].(string),
+			StartTime:         int64(p["start_time"].(float64)),
 			Ssrc:              uint32(p["ssrc"].(float64)),
 			id:                uint32(p["stream_id"].(float64)),
 			video_total_bytes: uint64(p["video_total_bytes"].(float64)),
@@ -88,6 +93,9 @@ func CreateFlvFile(name string) *File {
 }
 
 func IsTagHead(payload []byte) bool {
+	if len(payload) < 11 {
+		return false
+	}
 	if payload[0] == byte(8) || payload[0] == byte(9) {
 		if payload[8] == byte(0) && payload[9] == byte(0) && payload[10] == byte(0) {
 			tmpBuf := make([]byte, 4)

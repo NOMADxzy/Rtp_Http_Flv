@@ -12,6 +12,7 @@ import (
 	"github.com/NOMADxzy/livego/av"
 	"github.com/emirpasic/gods/lists/arraylist"
 	"sync"
+	"time"
 )
 
 //type rtpQueueItem struct {
@@ -41,9 +42,12 @@ type Queue struct {
 	accPackets        int    //记录收到包的数量
 	accLoss           int    //记录丢失包的数量
 	previousLostSeq   uint16 //三个连续的丢包说明发生了拥塞，去除队列前所有的nil，跳到下个有效包开始解析
+	startTime         int64  //流开始传输的时间 unix毫秒
+	delay             int
+	App               *App
 }
 
-func NewQueue(ssrc uint32, key string, wz int, record *FlvRecord, flvFile *utils.File) *Queue {
+func NewQueue(ssrc uint32, key string, wz int, record *FlvRecord, flvFile *utils.File, startTime int64, app *App) *Queue {
 	var hlsWriter *hls.Source
 	if configure.ENABLE_HLS { //选择是否开启hls服务
 		hlsWriter = hls.GetWriter(key)
@@ -60,6 +64,8 @@ func NewQueue(ssrc uint32, key string, wz int, record *FlvRecord, flvFile *utils
 		FlvWriters:        arraylist.New(),
 		hlsWriter:         hlsWriter,
 		cache:             NewCache(),
+		startTime:         startTime,
+		App:               app,
 	}
 }
 
@@ -89,8 +95,9 @@ func (q *Queue) RecvPacket() {
 					if err != nil {
 						q.flvRecord.Reset()
 					}
+				} else {
+					break
 				}
-				break
 			}
 		}
 	}
@@ -178,9 +185,19 @@ func (q *Queue) runQuic(seq uint16) {
 	q.accLoss += 1
 
 	if seq == q.previousLostSeq+uint16(1) {
-		fmt.Printf("[warning] Continuous packet loss, reshaping queue, %d packets removed\n", q.reshape())
-		q.flvRecord.Reset()
-		q.flvRecord.jumpToNextHead = true
+		moved := q.reshape()
+
+		if moved > 5 {
+			q.App.UdpBufferSize *= 2
+			err := q.App.UdpConn.SetReadBuffer(q.App.UdpBufferSize)
+			utils.CheckError(err)
+		}
+
+		fmt.Printf("[warning] Continuous packet loss, reshaping queue, %d packets removed, change udp buffer size to %vKB\n", moved, q.App.UdpBufferSize/1024)
+		if moved > 0 {
+			q.flvRecord.Reset()
+			q.flvRecord.jumpToNextHead = true
+		}
 	}
 	fmt.Println("packet lost seq = ", seq, ", ssrc = ", q.Ssrc, "run quic request")
 	pkt := quic.GetByQuic(q.Ssrc, seq)
@@ -254,8 +271,12 @@ func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
 			//fmt.Println(len(payload))
 			copy(record.flvTag[record.pos:record.pos+len(payload)], payload)
 		}
-		//得到一个flv tag
-
+		//得到一个flv tag,计算时延
+		now := time.Now().UnixMilli()
+		tmpBuf := record.flvTag[4:8]
+		ts := uint32(tmpBuf[3])<<24 + uint32(tmpBuf[0])<<16 + uint32(tmpBuf[1])<<8 + uint32(tmpBuf[2])
+		rtpQueue.delay = int(now - (rtpQueue.startTime + int64(ts)))
+		//fmt.Printf("时延：%vms\n", delay)
 		//将flv数据发送到该流下的所有客户端
 		//保存流的initialSegment发送到客户端才能播放
 		if !rtpQueue.cache.full {
@@ -298,23 +319,10 @@ func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
 		}
 		//fmt.Println("rtp seq:", rp.SequenceNumber, ",payload size: ", len(flvTag), ",rtp timestamp: ", rp.Timestamp)
 
-		record.Reset()
+		record.Reset() //重置tag缓存
 
 	}
 	return nil
-}
-
-func (q *Queue) Check() int { //检查窗口内队列Rtp的存在
-	re_trans := 0
-	//rtpParser := parser.NewRtpParser()
-	for i := 0; i < q.PaddingWindowSize; i++ {
-		rp, _ := q.queue.Get(i)
-		if rp == nil {
-			q.runQuic(q.FirstSeq + uint16(i))
-			re_trans += 1
-		}
-	}
-	return re_trans
 }
 
 func (q *Queue) isFirstOk() bool {

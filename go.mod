@@ -3,7 +3,7 @@ module Rtp_Http_Flv
 go 1.18
 
 require (
-	github.com/NOMADxzy/livego v1.0.9
+	github.com/NOMADxzy/livego v1.0.10
 	github.com/emirpasic/gods v1.18.1
 	github.com/q191201771/pprofplus v0.1.0
 	github.com/quic-go/quic-go v0.32.0

@@ -37,7 +37,7 @@ func init() {
 	flag.StringVar(&HTTP_FLV_ADDR, "httpflv_addr", ":7001", "HTTP-FLV server listen address")
 	flag.BoolVar(&ENABLE_HLS, "enable_hls", true, "enable hls service")
 	flag.StringVar(&HLS_ADDR, "hls_addr", ":7002", "HLS server listen address")
-	flag.BoolVar(&ENABLE_RECORD, "enable_record", true, "enable stream record")
+	flag.BoolVar(&ENABLE_RECORD, "enable_record", false, "enable stream record")
 
 	flag.Usage = usage
 }
