@@ -2,6 +2,7 @@ package httpflv
 
 import (
 	"Rtp_Http_Flv/configure"
+	"Rtp_Http_Flv/utils"
 	"log"
 	"net"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 
 type HttpHandler interface {
 	HandleNewFlvWriter(key string, writer *FLVWriter)
+	HandleDelayRequest(key string) int64
 }
 
 type Server struct {
@@ -17,27 +19,30 @@ type Server struct {
 	//FLVWriterMap map[string]*FLVWriter
 }
 
-type stream struct {
-	Key string `json:"key"`
-	Id  string `json:"id"`
-}
-
-type streams struct {
-	Publishers []stream `json:"publishers"`
-	Players    []stream `json:"players"`
-}
-
 func NewServer(handler HttpHandler) *Server {
 	return &Server{httpHandler: handler}
 }
 
-func (server *Server) Serve(l net.Listener) error {
+func (server *Server) Serve(l net.Listener, certFile string, keyFile string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		server.handleConn(w, r)
 	})
-	http.Serve(l, mux)
+
+	mux.HandleFunc("/time", func(w http.ResponseWriter, r *http.Request) {
+		server.handleTime(w, r)
+	})
+
+	if certFile == "" || keyFile == "" {
+		log.Fatal(http.Serve(l, mux))
+	} else {
+		log.Fatal(http.ServeTLS(l, mux, certFile, keyFile))
+	}
 	return nil
+}
+
+func (server *Server) handleTime(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 }
 
 func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +88,14 @@ func StartHTTPFlv(handler HttpHandler) *Server {
 			}
 		}()
 		log.Println("HTTP-FLV listen On", configure.HTTP_FLV_ADDR)
-		hdlServer.Serve(flvListen)
+		//判断文件存在
+		if !utils.PathExists(configure.KEY_FILE) || !utils.PathExists(configure.CERT_FILE) {
+			configure.KEY_FILE = ""
+			configure.CERT_FILE = ""
+		}
+
+		err := hdlServer.Serve(flvListen, configure.CERT_FILE, configure.KEY_FILE)
+		utils.CheckError(err)
 	}()
 	return hdlServer
 }

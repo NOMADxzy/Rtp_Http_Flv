@@ -6,6 +6,10 @@ import (
 	"os"
 )
 
+const (
+	MAX_UDP_CACHE_SIZE = 1024 * 1024 * 50 //50MB
+)
+
 var (
 	h                             bool
 	CLOUD_HOST                    string
@@ -21,6 +25,8 @@ var (
 	ENABLE_HLS                    bool
 	HLS_ADDR                      string
 	ENABLE_RECORD                 bool
+	CERT_FILE                     string
+	KEY_FILE                      string
 )
 
 func init() {
@@ -33,11 +39,13 @@ func init() {
 	flag.BoolVar(&DISABLE_QUIC, "disable_quic", false, "enable quic service")
 	flag.IntVar(&RTP_QUEUE_CHAN_SIZE, "queue_chan_size", 100, "rtp queue chan size")
 	flag.StringVar(&RECORD_DIR, "record_dir", "./record", "stream record dir")
-	flag.Float64Var(&PACKET_LOSS_RATE, "pack_loss", 0.002, "the rate to loss some packets")
+	flag.Float64Var(&PACKET_LOSS_RATE, "pack_loss", 0.000, "the rate to loss some packets")
 	flag.StringVar(&HTTP_FLV_ADDR, "httpflv_addr", ":7001", "HTTP-FLV server listen address")
-	flag.BoolVar(&ENABLE_HLS, "enable_hls", true, "enable hls service")
+	flag.BoolVar(&ENABLE_HLS, "enable_hls", false, "enable hls service")
 	flag.StringVar(&HLS_ADDR, "hls_addr", ":7002", "HLS server listen address")
-	flag.BoolVar(&ENABLE_RECORD, "enable_record", false, "enable stream record")
+	flag.BoolVar(&ENABLE_RECORD, "enable_record", true, "enable stream record")
+	flag.StringVar(&CERT_FILE, "cert_file", "certs/server.crt", "https server cert")
+	flag.StringVar(&KEY_FILE, "key_file", "certs/server.key", "https server key")
 
 	flag.Usage = usage
 }

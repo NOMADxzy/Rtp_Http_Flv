@@ -3,18 +3,23 @@ package utils
 import (
 	"Rtp_Http_Flv/configure"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 )
 
 func Get(url string) map[string]interface{} {
 
 	// 超时时间：5秒
-	client := &http.Client{Timeout: 10 * time.Second}
+	tr := &http.Transport{ //忽略证书校验
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr, Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
 		fmt.Println(err)
@@ -134,4 +139,15 @@ func FirstBeforeSecond(seq1 uint16, seq2 uint16) bool {
 	} else {
 		return seq1-seq2 > uint16(60000)
 	}
+}
+
+func PathExists(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	return false
 }

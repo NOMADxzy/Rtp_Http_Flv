@@ -27,13 +27,19 @@ func initQuic() *Conn {
 }
 
 func CloseQuic() {
-
-	err := QuicConn.dataStream.Close()
-	utils.CheckError(err)
-	err = QuicConn.infoStream.Close()
-	utils.CheckError(err)
+	if QuicConn == nil {
+		return
+	}
+	if QuicConn.dataStream != nil {
+		err := QuicConn.dataStream.Close()
+		utils.CheckError(err)
+	}
+	if QuicConn.infoStream != nil {
+		err := QuicConn.infoStream.Close()
+		utils.CheckError(err)
+	}
 	QuicConn = nil
-	fmt.Println("quic conn closed")
+	fmt.Printf("quic conn closed\n")
 }
 
 func GetByQuic(ssrc uint32, seq uint16) *rtp.RtpPack {
@@ -63,13 +69,13 @@ func GetByQuic(ssrc uint32, seq uint16) *rtp.RtpPack {
 	err = QuicConn.ReadRtp(&pkt)
 	if err != nil {
 		//没有该包的缓存
-		fmt.Println("quic err, can not get packet, seq：", seq)
+		fmt.Printf("[ssrc=%v]quic err, get packet failed, seq=%v\n", ssrc, seq)
 		return nil
 	}
 	if pkt == nil {
-		fmt.Println("err，quic received a nil packet")
+		fmt.Printf("[ssrc=%v]quic err，received a nil packet, seq=%v\n", ssrc, seq)
 	} else {
-		fmt.Printf("quic收到rtp包，Seq:\t %v \n", pkt.SequenceNumber)
+		fmt.Printf("quic received rtp packet，Seq:\t %v \n", pkt.SequenceNumber)
 		return pkt
 	}
 	return nil

@@ -50,7 +50,7 @@ func main() {
 func handleNewStream(ssrc uint32) *cache.Queue {
 	//更新流源信息
 	app.Publishers = utils.UpdatePublishers()
-	fmt.Println("new stream created ssrc = ", ssrc)
+	fmt.Printf("new stream created ssrc=%v\n", ssrc)
 
 	//设置key和ssrc的映射，以播放flv
 	key := app.Publishers[ssrc].Key
@@ -64,8 +64,8 @@ func handleNewStream(ssrc uint32) *cache.Queue {
 
 	var flvFile *utils.File
 	if configure.ENABLE_RECORD {
-		fmt.Println("Create record file path = ", configure.RECORD_DIR, "/", channel+".flv")
-		flvFile := utils.CreateFlvFile(channel)
+		fmt.Printf("Create record file path=%v\n", configure.RECORD_DIR+"/"+channel+".flv")
+		flvFile = utils.CreateFlvFile(channel)
 		app.FlvFiles.Add(flvFile)
 	}
 
@@ -94,6 +94,11 @@ type MyHttpHandler struct {
 func (myHttpHandler *MyHttpHandler) HandleNewFlvWriter(key string, flvWriter *httpflv.FLVWriter) {
 	rtpQueue := app.RtpQueueMap[app.KeySsrcMap[key]]
 	rtpQueue.FlvWriters.Add(flvWriter)
+}
+
+func (myHttpHandler *MyHttpHandler) HandleDelayRequest(key string) int64 {
+	startTime := app.Publishers[app.KeySsrcMap[key]].StartTime
+	return startTime
 }
 
 func receiveRtp() {

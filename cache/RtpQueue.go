@@ -134,7 +134,7 @@ func (q *Queue) Enqueue(rp *rtp.RtpPack) {
 	} else {
 		var relative int
 		if utils.FirstBeforeSecond(seq, q.FirstSeq) {
-			fmt.Println("useless packet seq: ", seq, ", firstSeq: ", q.FirstSeq)
+			fmt.Printf("[%v]useless packet seq: %v, firstSeq: %v\n", q.Ssrc, seq, q.FirstSeq)
 			return
 		} else {
 			if seq > q.FirstSeq {
@@ -155,42 +155,23 @@ func (q *Queue) Enqueue(rp *rtp.RtpPack) {
 				}
 			}
 		}
-		//if q.FirstSeq > seq {
-		//	if int(q.FirstSeq-seq) > 60000 { //序列号到头
-		//		relative = 65536 - int(q.FirstSeq) + int(seq)
-		//	} else { //过时的包
-		//		fmt.Println("useless packet seq: ", seq, ", firstSeq: ", q.FirstSeq)
-		//		return
-		//	}
-		//} else {
-		//	relative = int(seq - q.FirstSeq)
-		//}
-		//if relative <= q.queue.Size() { //没到队列终点
-		//	q.queue.Set(relative, rp)
-		//} else {
-		//	for i := q.queue.Size(); i <= relative; i++ {
-		//		if i != relative {
-		//			q.queue.Set(i, nil)
-		//			continue
-		//		}
-		//		q.queue.Set(i, rp)
-		//	}
-		//}
-
 	}
-
 }
 
 func (q *Queue) runQuic(seq uint16) {
 	q.accLoss += 1
 
-	if seq == q.previousLostSeq+uint16(1) {
+	if seq == q.previousLostSeq+uint16(1) { //出现连续丢包
 		moved := q.reshape()
 
 		if moved > 5 {
 			q.App.UdpBufferSize *= 2
-			err := q.App.UdpConn.SetReadBuffer(q.App.UdpBufferSize)
-			utils.CheckError(err)
+			if q.App.UdpBufferSize > configure.MAX_UDP_CACHE_SIZE {
+				q.App.UdpBufferSize /= 2
+			} else {
+				err := q.App.UdpConn.SetReadBuffer(q.App.UdpBufferSize)
+				utils.CheckError(err)
+			}
 		}
 
 		fmt.Printf("[warning] Continuous packet loss, reshaping queue, %d packets removed, change udp buffer size to %vKB\n", moved, q.App.UdpBufferSize/1024)
@@ -199,7 +180,7 @@ func (q *Queue) runQuic(seq uint16) {
 			q.flvRecord.jumpToNextHead = true
 		}
 	}
-	fmt.Println("packet lost seq = ", seq, ", ssrc = ", q.Ssrc, "run quic request")
+	fmt.Printf("[ssrc=%v] packet lost seq = %v, run quic request\n", q.Ssrc, seq)
 	pkt := quic.GetByQuic(q.Ssrc, seq)
 
 	q.previousLostSeq = seq
@@ -375,5 +356,5 @@ func (q *Queue) Close() {
 	if q.flvFile != nil {
 		q.flvFile.Close()
 	}
-	fmt.Println("stream closed ssrc = ", q.Ssrc)
+	fmt.Printf("stream closed ssrc=%v\n", q.Ssrc)
 }
