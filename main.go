@@ -54,7 +54,6 @@ func handleNewStream(ssrc uint32) *cache.Queue {
 
 	//设置key和ssrc的映射，以播放flv
 	key := app.Publishers[ssrc].Key
-	startTime := app.Publishers[ssrc].StartTime
 	app.KeySsrcMap[key] = ssrc
 
 	//创建rtp流队列
@@ -69,7 +68,7 @@ func handleNewStream(ssrc uint32) *cache.Queue {
 		app.FlvFiles.Add(flvFile)
 	}
 
-	rtpQueue := cache.NewQueue(ssrc, key, configure.RTP_QUEUE_PADDING_WINDOW_SIZE, flvRecord, flvFile, startTime, app)
+	rtpQueue := cache.NewQueue(ssrc, key, configure.RTP_QUEUE_PADDING_WINDOW_SIZE, flvRecord, flvFile, app)
 	app.RtpQueueMap[ssrc] = rtpQueue
 
 	go rtpQueue.RecvPacket()
@@ -91,14 +90,19 @@ func handleNewPacket(rp *rtp.RtpPack) {
 type MyHttpHandler struct {
 }
 
-func (myHttpHandler *MyHttpHandler) HandleNewFlvWriter(key string, flvWriter *httpflv.FLVWriter) {
+func (myHttpHandler *MyHttpHandler) HandleNewFlvWriterRequest(key string, flvWriter *httpflv.FLVWriter) {
 	rtpQueue := app.RtpQueueMap[app.KeySsrcMap[key]]
 	rtpQueue.FlvWriters.Add(flvWriter)
 }
 
-func (myHttpHandler *MyHttpHandler) HandleDelayRequest(key string) int64 {
+func (myHttpHandler *MyHttpHandler) HandleDelayRequest(key string) (int64, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Printf("request startTime err, no such key: %s\n", key)
+		}
+	}()
 	startTime := app.Publishers[app.KeySsrcMap[key]].StartTime
-	return startTime
+	return startTime, nil
 }
 
 func receiveRtp() {

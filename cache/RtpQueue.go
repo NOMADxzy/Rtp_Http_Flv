@@ -23,8 +23,7 @@ import (
 //[1,2,3,0,0]
 
 type Queue struct {
-	m  sync.RWMutex
-	wg sync.WaitGroup
+	m sync.RWMutex
 	//maxSize      int
 	Ssrc              uint32 //队列所属的流
 	ChannelKey        string
@@ -41,13 +40,14 @@ type Queue struct {
 	cache             *SegmentCache
 	accPackets        int    //记录收到包的数量
 	accLoss           int    //记录丢失包的数量
+	accFlvTags        int    // 记录收到的flvTag数量
 	previousLostSeq   uint16 //三个连续的丢包说明发生了拥塞，去除队列前所有的nil，跳到下个有效包开始解析
 	startTime         int64  //流开始传输的时间 unix毫秒
 	delay             int
 	App               *App
 }
 
-func NewQueue(ssrc uint32, key string, wz int, record *FlvRecord, flvFile *utils.File, startTime int64, app *App) *Queue {
+func NewQueue(ssrc uint32, key string, wz int, record *FlvRecord, flvFile *utils.File, app *App) *Queue {
 	var hlsWriter *hls.Source
 	if configure.ENABLE_HLS { //选择是否开启hls服务
 		hlsWriter = hls.GetWriter(key)
@@ -64,7 +64,6 @@ func NewQueue(ssrc uint32, key string, wz int, record *FlvRecord, flvFile *utils
 		FlvWriters:        arraylist.New(),
 		hlsWriter:         hlsWriter,
 		cache:             NewCache(),
-		startTime:         startTime,
 		App:               app,
 	}
 }
@@ -74,6 +73,7 @@ func (q *Queue) RecvPacket() {
 		p, ok := <-q.InChan
 		if ok {
 			q.Enqueue(p.(*rtp.RtpPack))
+			//fmt.Printf("队列长度%d\n", q.queue.Size())
 			//if q.accPackets == q.PaddingWindowSize {
 			//	q.Check()
 			//}
@@ -180,7 +180,6 @@ func (q *Queue) runQuic(seq uint16) {
 			q.flvRecord.jumpToNextHead = true
 		}
 	}
-	fmt.Printf("[ssrc=%v] packet lost seq = %v, run quic request\n", q.Ssrc, seq)
 	pkt := quic.GetByQuic(q.Ssrc, seq)
 
 	q.previousLostSeq = seq
@@ -244,7 +243,7 @@ func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
 			copy(record.flvTag[record.pos:record.pos+len(payload)], payload)
 			record.pos += len(payload)
 		}
-	} else { //该帧是结束帧
+	} else { //该帧是结束帧，获得一个flvTag
 		if record.flvTag == nil { //没有之前分片
 			record.flvTag = payload
 		} else { //有前面的分片
@@ -252,12 +251,12 @@ func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
 			//fmt.Println(len(payload))
 			copy(record.flvTag[record.pos:record.pos+len(payload)], payload)
 		}
+		rtpQueue.accFlvTags += 1
 		//得到一个flv tag,计算时延
-		now := time.Now().UnixMilli()
-		tmpBuf := record.flvTag[4:8]
-		ts := uint32(tmpBuf[3])<<24 + uint32(tmpBuf[0])<<16 + uint32(tmpBuf[1])<<8 + uint32(tmpBuf[2])
-		rtpQueue.delay = int(now - (rtpQueue.startTime + int64(ts)))
-		//fmt.Printf("时延：%vms\n", delay)
+		if rtpQueue.accFlvTags%400 == 0 {
+			rtpQueue.getDelay()
+		}
+
 		//将flv数据发送到该流下的所有客户端
 		//保存流的initialSegment发送到客户端才能播放
 		if !rtpQueue.cache.full {
@@ -304,6 +303,25 @@ func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
 
 	}
 	return nil
+}
+
+func (q *Queue) getDelay() {
+	tmpBuf := q.flvRecord.flvTag[4:8]
+	ts := uint32(tmpBuf[3])<<24 + uint32(tmpBuf[0])<<16 + uint32(tmpBuf[1])<<8 + uint32(tmpBuf[2])
+	if q.startTime == 0 { //还没有从云端获取到初始时间
+		utils.UpdatePublishers()
+		q.startTime = q.App.Publishers[q.Ssrc].StartTime
+		fmt.Printf("[ssrc=%v]get stream startTime from cloudserver, startTime=%v\n", q.Ssrc, q.startTime)
+		return
+	} else {
+		now := time.Now().UnixMilli()
+		if delay := int(now - (q.startTime + int64(ts))); delay < 0 {
+			return
+		} else {
+			q.delay = delay
+			fmt.Printf("时延：%vms\n", q.delay)
+		}
+	}
 }
 
 func (q *Queue) isFirstOk() bool {

@@ -3,6 +3,7 @@ package httpflv
 import (
 	"Rtp_Http_Flv/configure"
 	"Rtp_Http_Flv/utils"
+	"encoding/json"
 	"log"
 	"net"
 	"net/http"
@@ -10,13 +11,31 @@ import (
 )
 
 type HttpHandler interface {
-	HandleNewFlvWriter(key string, writer *FLVWriter)
-	HandleDelayRequest(key string) int64
+	HandleNewFlvWriterRequest(key string, writer *FLVWriter)
+	HandleDelayRequest(key string) (int64, error)
 }
 
 type Server struct {
 	httpHandler HttpHandler
-	//FLVWriterMap map[string]*FLVWriter
+}
+
+type Response struct {
+	w      http.ResponseWriter
+	Status int         `json:"status"`
+	Data   interface{} `json:"data"`
+}
+
+func (r *Response) SendJson() {
+	resp, _ := json.Marshal(r)
+	r.w.Header().Set("Content-Type", "application/json")
+	r.w.WriteHeader(r.Status)
+	_, err := r.w.Write(resp)
+	utils.CheckError(err)
+}
+
+type TimeResult struct {
+	StreamUrl string `json:"streamUrl"`
+	StartTime int64  `json:"startTime"`
 }
 
 func NewServer(handler HttpHandler) *Server {
@@ -29,8 +48,12 @@ func (server *Server) Serve(l net.Listener, certFile string, keyFile string) err
 		server.handleConn(w, r)
 	})
 
-	mux.HandleFunc("/time", func(w http.ResponseWriter, r *http.Request) {
-		server.handleTime(w, r)
+	mux.HandleFunc("/stats/time", func(w http.ResponseWriter, r *http.Request) {
+		err := r.ParseForm()
+		utils.CheckError(err)
+		path := r.Form.Get("stream")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		server.handleTime(w, path)
 	})
 
 	if certFile == "" || keyFile == "" {
@@ -41,8 +64,20 @@ func (server *Server) Serve(l net.Listener, certFile string, keyFile string) err
 	return nil
 }
 
-func (server *Server) handleTime(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+func (server *Server) handleTime(w http.ResponseWriter, path string) {
+	startTime, _ := server.httpHandler.HandleDelayRequest(path)
+	res := &Response{
+		w:      w,
+		Data:   nil,
+		Status: 200,
+	}
+	defer res.SendJson()
+	if startTime == 0 {
+		res.Status = 404
+	} else {
+		res.Data = TimeResult{StreamUrl: path, StartTime: startTime}
+	}
+
 }
 
 func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +106,7 @@ func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
 	writer := NewFLVWriter(paths[0], paths[1], url, w)
 
 	//server.handler.HandleWriter(writer)
-	server.httpHandler.HandleNewFlvWriter(path, writer)
+	server.httpHandler.HandleNewFlvWriterRequest(path, writer)
 	writer.Wait()
 }
 func StartHTTPFlv(handler HttpHandler) *Server {

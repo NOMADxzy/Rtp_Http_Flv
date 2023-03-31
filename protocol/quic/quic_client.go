@@ -50,6 +50,7 @@ func GetByQuic(ssrc uint32, seq uint16) *rtp.RtpPack {
 		return nil
 	}
 
+	fmt.Printf("[ssrc=%v] packet lost seq = %v, run quic request\n", ssrc, seq)
 	if QuicConn == nil {
 		QuicConn = initQuic()
 	}

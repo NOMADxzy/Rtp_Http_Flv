@@ -22,7 +22,7 @@ ffmpeg -f dshow -i video="Integrated Camera" -vcodec libx264 -preset:v ultrafast
 
 
 //客户端播放
-http://127.0.0.1:7001/live/movie.flv
+https://127.0.0.1:7001/live/movie.flv
 http://127.0.0.1:7002/live/movie.flv
 
 - openssl genrsa -out server.key 1024 [生成服务器私钥]
