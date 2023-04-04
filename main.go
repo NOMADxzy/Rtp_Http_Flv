@@ -9,7 +9,6 @@ import (
 	"Rtp_Http_Flv/utils"
 	"fmt"
 	"github.com/emirpasic/gods/lists/arraylist"
-	"github.com/q191201771/pprofplus/pprofplus/pkg/pprofplus"
 	"net"
 	"strings"
 )
@@ -36,8 +35,8 @@ func main() {
 		FlvFiles:      arraylist.New(), //用于关闭打开的文件具柄
 	}
 
-	err := pprofplus.Start() //内存监测
-	utils.CheckError(err)
+	//err := pprofplus.Start() //内存监测
+	//utils.CheckError(err)
 
 	go app.CheckAlive() //检验流是否关闭
 
@@ -91,7 +90,11 @@ type MyHttpHandler struct {
 }
 
 func (myHttpHandler *MyHttpHandler) HandleNewFlvWriterRequest(key string, flvWriter *httpflv.FLVWriter) {
-	rtpQueue := app.RtpQueueMap[app.KeySsrcMap[key]]
+	ssrc := app.KeySsrcMap[key]
+	if ssrc == 0 { //定义有效的ssrc不为0
+
+	}
+	rtpQueue := app.RtpQueueMap[ssrc]
 	rtpQueue.FlvWriters.Add(flvWriter)
 }
 
@@ -105,16 +108,32 @@ func (myHttpHandler *MyHttpHandler) HandleDelayRequest(key string) (int64, error
 	return startTime, nil
 }
 
+func (myHttpHandler *MyHttpHandler) HasChannel(path string) bool {
+	return app.KeySsrcMap[path] != 0 //有效的ssrc不为0
+}
+
 func receiveRtp() {
+	var err error
+	var addr *net.UDPAddr
+	var conn *net.UDPConn
 
-	addr, err := net.ResolveUDPAddr("udp4", "0.0.0.0"+configure.UDP_SOCKET_ADDR)
-	utils.CheckError(err)
-	fmt.Printf("Udp Socket listen On 0.0.0.0%v\n", configure.UDP_SOCKET_ADDR)
+	isMulticast := strings.IndexByte(configure.UDP_SOCKET_ADDR, '.') > 0
 
-	// Open up a connection
-	//conn, err := net.ListenMulticastUDP("udp4", nil, addr)
-	conn, err := net.ListenUDP("udp", addr)
-	utils.CheckError(err)
+	if isMulticast { // 组播
+		addr, err = net.ResolveUDPAddr("udp4", configure.UDP_SOCKET_ADDR)
+		utils.CheckError(err)
+		conn, err = net.ListenMulticastUDP("udp4", nil, addr)
+		utils.CheckError(err)
+		fmt.Printf("Udp Socket listen On %v\n", configure.UDP_SOCKET_ADDR)
+
+	} else { // 单播
+		addr, err = net.ResolveUDPAddr("udp4", "0.0.0.0"+configure.UDP_SOCKET_ADDR)
+		utils.CheckError(err)
+		conn, err = net.ListenUDP("udp", addr)
+		utils.CheckError(err)
+		fmt.Printf("Udp Socket listen On 0.0.0.0%v\n", configure.UDP_SOCKET_ADDR)
+	}
+
 	err = conn.SetReadBuffer(app.UdpBufferSize)
 	utils.CheckError(err)
 
@@ -138,7 +157,6 @@ func receiveRtp() {
 		if rp != nil {
 			handleNewPacket(rp)
 		}
-		utils.CheckError(err)
 	}
 
 }

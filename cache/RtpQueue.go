@@ -270,6 +270,7 @@ func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
 			if f {
 				writer := val.(*httpflv.FLVWriter)
 				if writer.Closed {
+					writer.Close()
 					rtpQueue.FlvWriters.Remove(i)
 				} else { //播放该分段
 					if !writer.Init {

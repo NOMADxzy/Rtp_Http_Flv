@@ -4,6 +4,7 @@ import (
 	"Rtp_Http_Flv/configure"
 	"Rtp_Http_Flv/utils"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 type HttpHandler interface {
 	HandleNewFlvWriterRequest(key string, writer *FLVWriter)
 	HandleDelayRequest(key string) (int64, error)
+	HasChannel(path string) bool
 }
 
 type Server struct {
@@ -96,6 +98,10 @@ func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimSuffix(strings.TrimLeft(u, "/"), ".flv")
 	paths := strings.SplitN(path, "/", 2)
 	log.Println("url:", u, "path:", path, "paths:", paths)
+	if !server.httpHandler.HasChannel(path) {
+		fmt.Printf("[path=%v]flv source do not exist\n", path)
+		return
+	}
 
 	if len(paths) != 2 {
 		http.Error(w, "invalid path", http.StatusBadRequest)

@@ -104,7 +104,7 @@ func (flvWriter *FLVWriter) Wait() {
 	}
 }
 
-func (flvWriter *FLVWriter) Close(error) {
+func (flvWriter *FLVWriter) Close() {
 	log.Println("http flv closed")
 	if !flvWriter.Closed {
 		close(flvWriter.packetQueue)
