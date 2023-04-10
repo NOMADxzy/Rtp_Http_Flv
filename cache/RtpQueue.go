@@ -35,8 +35,8 @@ type Queue struct {
 	init              bool
 	flvRecord         *FlvRecord      //解析flv结构
 	FlvWriters        *arraylist.List //http-flv对象
-	hlsWriter         *hls.Source
-	flvFile           *utils.File //录制文件
+	hlsWriter         *hls.Source     // hls服务
+	flvFile           *utils.File     //录制文件
 	cache             *SegmentCache
 	accPackets        int    //记录收到包的数量
 	accLoss           int    //记录丢失包的数量
@@ -79,25 +79,32 @@ func (q *Queue) RecvPacket() {
 			//}
 			for q.queue.Size() > q.PaddingWindowSize { //窗口外的必取，包括不存在的
 				protoRp := q.Dequeue()
-				//q.outChan <- protoRp
-				err := q.extractFlv(protoRp)
-				if err != nil {
-					q.flvRecord.Reset()
-				}
+				_ = q.extractFlv(protoRp)
 			}
 			for {
-				if q.queue.Size() <= 1 {
-					break //最少保留一个包在队列中，否则入队列时无法计算相对位置
-				}
-				if q.isFirstOk() { //窗口内的一直取到空包位置处为止
+				if q.isFirstOk() && q.queue.Size() > 1 { //窗口内的一直取到空包位置处为止,//最少保留一个包在队列中，否则入队列时无法计算相对位置
 					protoRp := q.Dequeue()
-					err := q.extractFlv(protoRp)
-					if err != nil {
-						q.flvRecord.Reset()
-					}
+					_ = q.extractFlv(protoRp)
 				} else {
 					break
 				}
+			}
+		}
+	}
+}
+
+func (q *Queue) PrintInfo() {
+	for {
+		_ = <-time.After(5 * time.Second)
+		if val, ok := q.queue.Get(q.queue.Size() - 1); ok {
+			lastSeq := val.(*rtp.RtpPack).SequenceNumber
+			fmt.Printf("[ssrc=%d]current rtpQueue length: %d, FirstSeq: %d, LastSeq: %d, accRtpRecv: %d, accFlvRecv: %d\n",
+				q.Ssrc, q.queue.Size(), q.FirstSeq, lastSeq, q.accPackets, q.accFlvTags)
+		} else {
+			fmt.Printf("[ssrc=%d]current rtpQueue length: %d, FirstSeq: %d, LastSeq: nil, accRtpRecv: %d, accFlvRecv: %d\n",
+				q.Ssrc, q.queue.Size(), q.FirstSeq, q.accPackets, q.accFlvTags)
+			if q.queue.Size() > 0 {
+				panic("rtpQueue params error")
 			}
 		}
 	}
@@ -107,10 +114,7 @@ func (q *Queue) Play() {
 	for {
 		protoRp, ok := <-q.outChan
 		if ok {
-			err := q.extractFlv(protoRp)
-			if err != nil {
-				q.flvRecord.Reset()
-			}
+			_ = q.extractFlv(protoRp)
 		} else {
 			return
 		}
@@ -202,8 +206,8 @@ func (q *Queue) Dequeue() interface{} {
 }
 
 // 从rtp包中提取出flvTag，根据record信息组合分片，debug打印调试信息
-func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
-	record := rtpQueue.flvRecord
+func (q *Queue) extractFlv(protoRp interface{}) error {
+	record := q.flvRecord
 
 	if protoRp == nil { //该包丢失
 		record.Reset()               //清空当前tag的缓存
@@ -251,32 +255,33 @@ func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
 			//fmt.Println(len(payload))
 			copy(record.flvTag[record.pos:record.pos+len(payload)], payload)
 		}
-		rtpQueue.accFlvTags += 1
+		q.accFlvTags += 1
 		//得到一个flv tag,计算时延
-		if rtpQueue.accFlvTags%400 == 0 {
-			rtpQueue.getDelay()
+		if q.accFlvTags%400 == 0 {
+			q.getDelay()
 		}
 
 		//将flv数据发送到该流下的所有客户端
 		//保存流的initialSegment发送到客户端才能播放
-		if !rtpQueue.cache.full {
+		if !q.cache.full {
 			p := &flv.Packet{}
 			p.Parse(record.flvTag, false)
 
-			rtpQueue.cache.Write(p)
+			q.cache.Write(p)
 		}
-		for i := 0; i < rtpQueue.FlvWriters.Size(); i++ {
-			val, f := rtpQueue.FlvWriters.Get(i)
+		for i := 0; i < q.FlvWriters.Size(); i++ {
+			val, f := q.FlvWriters.Get(i)
 			if f {
 				writer := val.(*httpflv.FLVWriter)
 				if writer.Closed {
 					writer.Close()
-					rtpQueue.FlvWriters.Remove(i)
+					q.FlvWriters.Remove(i)
 				} else { //播放该分段
 					if !writer.Init {
-						err := rtpQueue.cache.SendInitialSegment(writer)
+						err := q.cache.SendInitialSegment(writer)
 						if err != nil {
-							return err
+							q.flvRecord.Reset()
+							return nil
 						}
 						writer.Init = true
 					}
@@ -286,16 +291,16 @@ func (rtpQueue *Queue) extractFlv(protoRp interface{}) error {
 			}
 		}
 		//发送到hlsServer中
-		if rtpQueue.hlsWriter != nil {
+		if q.hlsWriter != nil {
 			p := &av.Packet{}
 			p.Parse(record.flvTag, true)
-			err := rtpQueue.hlsWriter.Write(p)
+			err := q.hlsWriter.Write(p)
 			utils.CheckError(err)
 		}
 
 		//录制到文件中
-		if rtpQueue.flvFile != nil {
-			err := rtpQueue.flvFile.WriteTagDirect(record.flvTag)
+		if q.flvFile != nil {
+			err := q.flvFile.WriteTagDirect(record.flvTag)
 			utils.CheckError(err)
 		}
 		//fmt.Println("rtp seq:", rp.SequenceNumber, ",payload size: ", len(flvTag), ",rtp timestamp: ", rp.Timestamp)
@@ -320,7 +325,7 @@ func (q *Queue) getDelay() {
 			return
 		} else {
 			q.delay = delay
-			fmt.Printf("时延：%vms\n", q.delay)
+			fmt.Printf("[ssrc=%v]时延：%vms\n", q.Ssrc, q.delay)
 		}
 	}
 }
@@ -342,7 +347,7 @@ func (q *Queue) reshape() int {
 	if val, ok := q.queue.Get(1); ok {
 		if val == nil { //三个连续的丢包
 			quic.GetByQuic(q.Ssrc, q.FirstSeq+1) //让云端知道丢了三个连续包
-			for {
+			for q.queue.Size() > 0 {
 				q.queue.Remove(0)
 				q.FirstSeq += 1
 				q.accLoss += 1

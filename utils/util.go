@@ -3,7 +3,6 @@ package utils
 import (
 	"Rtp_Http_Flv/configure"
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,10 +15,7 @@ import (
 func Get(url string) map[string]interface{} {
 
 	// 超时时间：5秒
-	tr := &http.Transport{ //忽略证书校验
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr, Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
 		fmt.Println(err)

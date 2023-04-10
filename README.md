@@ -46,7 +46,8 @@
 Usage of ./Rtp_Http_Flv:
   -cloud_host           云端节点ip地址("127.0.0.1") 
   -api_addr string      云端节点http服务的地址(":8090")
-  -udp_addr string      监听udp的端口(":5222")
+  -udp_addr string      监听udp的端口(":5222")#单播
+                                   ("239.0.0.1:5222")#组播
   -quic_addr string     云端节点quic服务的地址(":4242")
   -httpflv_addr string  提供httpflv服务的地址(":7001")
   -disable_quic bool    是否停用quic重传(false)

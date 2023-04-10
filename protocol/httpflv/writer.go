@@ -1,6 +1,7 @@
 package httpflv
 
 import (
+	"Rtp_Http_Flv/container/flv"
 	"Rtp_Http_Flv/utils"
 	"errors"
 	"fmt"
@@ -10,7 +11,7 @@ import (
 
 const (
 	headerLen   = 11
-	maxQueueNum = 10240
+	maxQueueNum = 1024
 )
 
 type FLVWriter struct {
@@ -50,6 +51,38 @@ func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
 	return ret
 }
 
+func (flvWriter *FLVWriter) DropPacket(pktQue chan []byte) {
+	fmt.Printf("[%v] packet queue max!!!\n", flvWriter.url)
+	for i := 0; i < maxQueueNum-84; i++ {
+		tmpPkt, ok := <-pktQue
+		if !ok {
+			continue
+		}
+		p := &flv.Packet{}
+		p.Parse(tmpPkt, false)
+		if p.IsVideo {
+			videoPkt, ok := p.Header.(flv.VideoPacketHeader)
+			// dont't drop sps config and dont't drop key frame
+			if ok && (videoPkt.IsSeq() || videoPkt.IsKeyFrame()) {
+				fmt.Printf("insert keyframe to queue\n")
+				pktQue <- tmpPkt
+			}
+
+			if len(pktQue) > maxQueueNum-10 {
+				<-pktQue
+			}
+			// drop other packet
+			<-pktQue
+		}
+		// try to don't drop audio
+		if p.IsAudio {
+			fmt.Printf("insert audio to queue\n")
+			pktQue <- tmpPkt
+		}
+	}
+	fmt.Printf("packet queue len: %d\n", len(pktQue))
+}
+
 func (flvWriter *FLVWriter) Write(p []byte) (err error) {
 	err = nil
 	if flvWriter.Closed {
@@ -63,6 +96,9 @@ func (flvWriter *FLVWriter) Write(p []byte) (err error) {
 		}
 	}()
 	//fmt.Println("flvwriter队列长度：", len(flvWriter.packetQueue))
+	if len(flvWriter.packetQueue) >= maxQueueNum-24 {
+		flvWriter.DropPacket(flvWriter.packetQueue)
+	}
 	flvWriter.packetQueue <- p
 
 	return
@@ -70,6 +106,7 @@ func (flvWriter *FLVWriter) Write(p []byte) (err error) {
 
 func (flvWriter *FLVWriter) SendPacket() error {
 	for {
+		//fmt.Println("flv队列长度：", len(flvWriter.packetQueue))
 		p, ok := <-flvWriter.packetQueue
 		if ok {
 			h := flvWriter.buf[:headerLen]
@@ -93,8 +130,6 @@ func (flvWriter *FLVWriter) SendPacket() error {
 		}
 
 	}
-
-	return nil
 }
 
 func (flvWriter *FLVWriter) Wait() {

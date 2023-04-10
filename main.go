@@ -9,6 +9,7 @@ import (
 	"Rtp_Http_Flv/utils"
 	"fmt"
 	"github.com/emirpasic/gods/lists/arraylist"
+	"github.com/q191201771/pprofplus/pprofplus/pkg/pprofplus"
 	"net"
 	"strings"
 )
@@ -35,8 +36,8 @@ func main() {
 		FlvFiles:      arraylist.New(), //用于关闭打开的文件具柄
 	}
 
-	//err := pprofplus.Start() //内存监测
-	//utils.CheckError(err)
+	err := pprofplus.Start() //内存监测
+	utils.CheckError(err)
 
 	go app.CheckAlive() //检验流是否关闭
 
@@ -71,7 +72,7 @@ func handleNewStream(ssrc uint32) *cache.Queue {
 	app.RtpQueueMap[ssrc] = rtpQueue
 
 	go rtpQueue.RecvPacket()
-	//go rtpQueue.Play()
+	go rtpQueue.PrintInfo()
 	return rtpQueue
 }
 
