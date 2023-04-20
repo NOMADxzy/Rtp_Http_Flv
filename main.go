@@ -141,12 +141,18 @@ func receiveRtp() {
 	app.UdpConn = conn
 	rtpParser := parser.NewRtpParser()
 
+	firstPkt := true
 	for {
 		//读udp数据
 		buff := make([]byte, 1300)
 		//num, err := conn.Read(buff)
-		num, _, err := conn.ReadFromUDP(buff)
+		num, addr, err := conn.ReadFromUDP(buff)
 		utils.CheckError(err)
+		if firstPkt {
+			configure.CLOUD_HOST = addr.IP.String()
+			fmt.Printf("udp connection established, remote IP=%v\n", configure.CLOUD_HOST)
+			firstPkt = false
+		}
 
 		if utils.IsPacketLoss() {
 			continue

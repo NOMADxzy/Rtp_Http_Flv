@@ -30,7 +30,7 @@
 #### 2. 启动边缘节点，接收云端节点发过来的rtp流，并提供httpflv服务
 `./edgeserver -udp_addr :5222 -pack_loss 0.002`
 
-#### 3. 使用`ffmpeg`等工具推流到云端节点，命令: <br>`ffmpeg -re -i caton.mp4 -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie`
+#### 3. 使用`ffmpeg`等工具推流到云端节点，命令: <br>`ffmpeg -re -stream_loop -1 -i carton.mp4  -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie`
 
 #### 4. 通过以下方式播放
 [flv 播放器](http://bilibili.github.io/flv.js/demo/)，输入播放地址播放：`http://127.0.0.1:7001/live/movie.flv` <br>
@@ -44,7 +44,6 @@
 ```bash
 ./Rtp_Http_Flv -h
 Usage of ./Rtp_Http_Flv:
-  -cloud_host           云端节点ip地址("127.0.0.1") 
   -api_addr string      云端节点http服务的地址(":8090")
   -udp_addr string      监听udp的端口(":5222")#单播
                                    ("239.0.0.1:5222")#组播

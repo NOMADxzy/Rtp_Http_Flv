@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/NOMADxzy/livego/av"
 	"github.com/emirpasic/gods/lists/arraylist"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -96,6 +97,10 @@ func (q *Queue) RecvPacket() {
 func (q *Queue) PrintInfo() {
 	for {
 		_ = <-time.After(5 * time.Second)
+		if q.Ssrc == 0 {
+			return
+		}
+
 		if val, ok := q.queue.Get(q.queue.Size() - 1); ok {
 			lastSeq := val.(*rtp.RtpPack).SequenceNumber
 			fmt.Printf("[ssrc=%d]current rtpQueue length: %d, FirstSeq: %d, LastSeq: %d, accRtpRecv: %d, accFlvRecv: %d\n",
@@ -276,6 +281,7 @@ func (q *Queue) extractFlv(protoRp interface{}) error {
 				if writer.Closed {
 					writer.Close()
 					q.FlvWriters.Remove(i)
+					runtime.GC()
 				} else { //播放该分段
 					if !writer.Init {
 						err := q.cache.SendInitialSegment(writer)
@@ -380,5 +386,7 @@ func (q *Queue) Close() {
 	if q.flvFile != nil {
 		q.flvFile.Close()
 	}
+	q.Ssrc = 0
 	fmt.Printf("stream closed ssrc=%v\n", q.Ssrc)
+	runtime.GC()
 }

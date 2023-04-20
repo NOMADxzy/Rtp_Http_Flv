@@ -31,7 +31,7 @@ var (
 
 func init() {
 	flag.BoolVar(&h, "h", false, "this help")
-	flag.StringVar(&CLOUD_HOST, "cloud_host", "127.0.0.1", "host of cloud server")
+	//flag.StringVar(&CLOUD_HOST, "cloud_host", "127.0.0.1", "host of cloud server")
 	flag.StringVar(&API_ADDR, "api_addr", ":8090", "http api server addr")
 	flag.StringVar(&UDP_SOCKET_ADDR, "udp_addr", ":5222", "udp listen addr")
 	flag.StringVar(&QUIC_ADDR, "quic_addr", ":4242", "quic server addr")
