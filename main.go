@@ -9,8 +9,8 @@ import (
 	"Rtp_Http_Flv/utils"
 	"fmt"
 	"github.com/emirpasic/gods/lists/arraylist"
-	"github.com/q191201771/pprofplus/pprofplus/pkg/pprofplus"
 	"net"
+	"strconv"
 	"strings"
 )
 
@@ -36,8 +36,8 @@ func main() {
 		FlvFiles:      arraylist.New(), //用于关闭打开的文件具柄
 	}
 
-	err := pprofplus.Start() //内存监测
-	utils.CheckError(err)
+	//err := pprofplus.Start() //内存监测
+	//utils.CheckError(err)
 
 	go app.CheckAlive() //检验流是否关闭
 
@@ -148,10 +148,23 @@ func receiveRtp() {
 		//num, err := conn.Read(buff)
 		num, addr, err := conn.ReadFromUDP(buff)
 		utils.CheckError(err)
-		if firstPkt {
+		if firstPkt { // 收到云端的第一个数据包
+			firstPkt = false
 			configure.CLOUD_HOST = addr.IP.String()
 			fmt.Printf("udp connection established, remote IP=%v\n", configure.CLOUD_HOST)
-			firstPkt = false
+			if buff[0] == '0' && buff[1] == '0' && buff[2] == '0' && buff[3] == '1' { // 标志收到初始化信息
+				QuicPort := uint16(buff[4])<<8 + uint16(buff[5]) // 大端地址
+				ApiPort := uint16(buff[6])<<8 + uint16(buff[7])  // 大端地址
+				fmt.Printf("[logging] initial port message received, quic port=%v, http port=%v\n", QuicPort, ApiPort)
+
+				configure.QUIC_ADDR = ":" + strconv.Itoa(int(QuicPort)) // 优先级：从云端收到的端口初始化信息>本地configure配置的端口初始化信息
+				configure.API_ADDR = ":" + strconv.Itoa(int(ApiPort))
+				configure.INIT = true
+
+				continue
+			} else {
+				fmt.Printf("[logging] use local port config, quic port=%v, http port=%v\n", configure.QUIC_ADDR, configure.API_ADDR)
+			}
 		}
 
 		if utils.IsPacketLoss() {

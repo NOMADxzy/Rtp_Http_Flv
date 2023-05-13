@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"Rtp_Http_Flv/configure"
 	"Rtp_Http_Flv/protocol/quic"
 	"Rtp_Http_Flv/utils"
 	"github.com/emirpasic/gods/lists/arraylist"
@@ -20,6 +21,9 @@ type App struct { //边缘节点实体
 func (app *App) CheckAlive() {
 	for {
 		<-time.After(5 * time.Second) //
+		if !configure.INIT {          // 还没收到初始信息，没有流
+			continue
+		}
 		app.Publishers = utils.UpdatePublishers()
 		for ssrc := range app.RtpQueueMap {
 			info := app.Publishers[ssrc]

@@ -386,7 +386,7 @@ func (q *Queue) Close() {
 	if q.flvFile != nil {
 		q.flvFile.Close()
 	}
-	q.Ssrc = 0
 	fmt.Printf("stream closed ssrc=%v\n", q.Ssrc)
+	q.Ssrc = 0 // 表示流已关闭，用于别处判断
 	runtime.GC()
 }

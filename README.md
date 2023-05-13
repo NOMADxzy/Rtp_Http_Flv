@@ -7,7 +7,7 @@
 - 通过特定方式组织收到的rtp数据包，保证有序，发生丢包时通过`QUIC`协议重传rtp包
 - 对收到的不同流，通过channel区分，通过`httpflv`服务向客户端提供不同channel的直播/点播
 
-### 涉及的传输协议
+### 传输协议
 - [RTMP](https://github.com/melpon/rfc/blob/master/rtmp.md)
 - [RTP](https://www.rfc-editor.org/rfc/rfc3550.html)
 - [QUIC](https://datatracker.ietf.org/doc/html/rfc9000)
@@ -22,18 +22,26 @@
 1. 下载源码`https://github.com/NOMADxzy/Rtp_Http_Flv.git`
 2. 去 Rtp_Http_Flv 目录中 执行 `go build -o edgeserver.exe`
 
+## 准备
+#### 生成https证书、私钥
+- mkdir certs
+- cd certs
+- openssl genrsa -out server.key 1024 [生成服务器私钥]
+- openssl req -new -key server.key -out server.csr [根据私钥和输入的信息(域名)生成证书请求文件]
+- openssl x509 -req -in server.csr -out server.crt -signkey server.key -days 3650 [用私钥和证书请求文件生成证书]
+
 ## 使用
 
-#### 1. 启动[云端节点](https://github.com/NOMADxzy/Rtmp_Rtp_Flv)，监听rtmp`1935`端口;
+#### 1. 启动边缘节点，监听本地端口，准备接收云端节点发过来的rtp流，并转为http-flv服务
+`./edgeserver [-udp_addr :5222] [-pack_loss 0.002]`
+
+#### 2. 启动[云端节点](https://github.com/NOMADxzy/Rtmp_Rtp_Flv)，监听rtmp`1935`端口;
 `./cloudserver`
 
-#### 2. 启动边缘节点，接收云端节点发过来的rtp流，并提供httpflv服务
-`./edgeserver -udp_addr :5222 -pack_loss 0.002`
-
-#### 3. 使用`ffmpeg`等工具推流到云端节点，命令: <br>`ffmpeg -re -stream_loop -1 -i carton.mp4  -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie`
+#### 3. 使用`ffmpeg`等工具推流到云端节点，命令: <br>`ffmpeg -re -stream_loop -1 -i skiing.mp4  -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie`
 
 #### 4. 通过以下方式播放
-[flv 播放器](http://bilibili.github.io/flv.js/demo/)，输入播放地址播放：`http://127.0.0.1:7001/live/movie.flv` <br>
+[flv 播放器](http://bilibili.github.io/flv.js/demo/)，输入播放地址播放：`https://127.0.0.1:7001/live/movie.flv` <br>
 
 [hls 播放器](http://players.akamai.com/players/hlsjs)，输入播放地址播放：`http://127.0.0.1:7002/live/movie.m3u8`
 
