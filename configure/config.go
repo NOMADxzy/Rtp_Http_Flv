@@ -32,9 +32,9 @@ var (
 
 func init() {
 	flag.BoolVar(&h, "h", false, "this help")
-	flag.StringVar(&UDP_SOCKET_ADDR, "udp_addr", ":5222", "udp listen addr")
-	flag.StringVar(&API_ADDR, "api_addr", ":8090", "http api server addr") // 主要通过云端发过来，不建议在此指定
-	flag.StringVar(&QUIC_ADDR, "quic_addr", ":4242", "quic server addr")   // 主要通过云端发过来，不建议在此指定
+	flag.StringVar(&UDP_SOCKET_ADDR, "udp_addr", ":5222", "udp listen addr") // :5222表示单播 239.0.0.1:5222表示组播
+	flag.StringVar(&API_ADDR, "api_addr", ":8090", "http api server addr")   // 主要通过云端发过来，不建议在此指定
+	flag.StringVar(&QUIC_ADDR, "quic_addr", ":4242", "quic server addr")     // 主要通过云端发过来，不建议在此指定
 	flag.IntVar(&RTP_QUEUE_PADDING_WINDOW_SIZE, "padding_size", 100, "rtp queue window")
 	flag.BoolVar(&DISABLE_QUIC, "disable_quic", false, "enable quic service")
 	flag.IntVar(&RTP_QUEUE_CHAN_SIZE, "queue_chan_size", 100, "rtp queue chan size")
