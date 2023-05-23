@@ -1,7 +1,9 @@
 package main
 
 import (
-	"Rtp_Http_Flv/utils"
+	"bytes"
+	"encoding/json"
+
 	"crypto/tls"
 	"errors"
 	"flag"
@@ -98,7 +100,7 @@ func getDelay(header *TagHeader, startTime int64) int {
 
 func httpFlv(reqUrl string, id int, interval int) {
 	configure.Init()
-	publishers := utils.UpdatePublishers()
+	publishers := UpdatePublishers()
 	startTime := publishers[1020304].StartTime // 测试时只有第一个流
 	TotalBytes := 0
 
@@ -152,14 +154,95 @@ func httpFlv(reqUrl string, id int, interval int) {
 
 func main() {
 	var num int
-	flag.IntVar(&num, "n", 10, "thread num")
+	var reqUrl string
+
+	flag.IntVar(&num, "n", 500, "thread num")
+	flag.StringVar(&reqUrl, "url", "https://127.0.0.1:7001/live/movie.flv", "stream url")
 	flag.Parse()
 
-	reqUrl := "https://127.0.0.1:7001/live/movie.flv"
 	for id := 0; id < num; id++ {
-		time.Sleep(time.Millisecond * 100)
-		go httpFlv(reqUrl, id, 10*num)
+		//time.Sleep(time.Millisecond * 100)
+		go httpFlv(reqUrl, id, 100)
 	}
 	time.Sleep(time.Hour)
 
+}
+
+func Get(url string) map[string]interface{} {
+
+	// 超时时间：5秒
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		CheckError(err)
+	}(resp.Body)
+	var buffer [512]byte
+	result := bytes.NewBuffer(nil)
+	for {
+		n, err := resp.Body.Read(buffer[0:])
+		result.Write(buffer[0:n])
+		if err != nil && err == io.EOF {
+			break
+		} else if err != nil {
+			panic(err)
+		}
+	}
+
+	var res map[string]interface{}
+	err = json.Unmarshal(result.Bytes(), &res)
+	CheckError(err)
+	if res["data"].(map[string]interface{})["publishers"] == nil {
+		return nil
+	}
+	return res
+}
+
+type Publisher struct {
+	Key               string
+	url               string
+	StartTime         int64
+	Ssrc              uint32
+	id                uint32
+	video_total_bytes uint64
+	video_speed       uint64
+	audio_total_bytes uint64
+	audio_speed       uint64
+}
+
+func UpdatePublishers() map[uint32]*Publisher {
+	newPublishers := make(map[uint32]*Publisher) //清空map
+
+	res := Get("http://127.0.0.1:8090/stat/livestat")
+	if res == nil {
+		return nil
+	}
+	pubs := res["data"].(map[string]interface{})["publishers"].([]interface{})
+
+	for _, pub := range pubs {
+		p := pub.(map[string]interface{})
+
+		newPublishers[uint32(p["ssrc"].(float64))] = &Publisher{
+			Key:               p["key"].(string),
+			url:               p["url"].(string),
+			StartTime:         int64(p["start_time"].(float64)),
+			Ssrc:              uint32(p["ssrc"].(float64)),
+			id:                uint32(p["stream_id"].(float64)),
+			video_total_bytes: uint64(p["video_total_bytes"].(float64)),
+			video_speed:       uint64(p["video_speed"].(float64)),
+			audio_total_bytes: uint64(p["audio_total_bytes"].(float64)),
+			audio_speed:       uint64(p["audio_speed"].(float64)),
+		}
+	}
+	return newPublishers
+}
+
+func CheckError(err error) {
+	if err != nil {
+		panic(err)
+	}
 }

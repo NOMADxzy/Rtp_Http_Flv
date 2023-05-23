@@ -28,3 +28,8 @@ http://127.0.0.1:7002/live/movie.flv
 - openssl genrsa -out server.key 1024 [生成服务器私钥]
 - openssl req -new -key server.key -out server.csr [根据私钥和输入的信息(域名)生成证书请求文件]
 - openssl x509 -req -in server.csr -out server.crt -signkey server.key -days 3650 [用私钥和证书请求文件生成证书]
+
+//对比
+main -udp_addr :5223 -httpflv_addr :7002
+main -disable_quic
+ffmpeg -re -stream_loop -1 -i skiing.mp4 -vcodec copy -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie

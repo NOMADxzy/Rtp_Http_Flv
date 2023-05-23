@@ -179,7 +179,14 @@ func (q *Queue) runQuic(seq uint16) {
 				q.App.UdpBufferSize /= 2
 			} else {
 				err := q.App.UdpConn.SetReadBuffer(q.App.UdpBufferSize)
-				utils.CheckError(err)
+				if err != nil {
+					defer func() {
+						if x := recover(); x != nil {
+							fmt.Printf("runtime error: %v\n", x)
+						}
+					}()
+					panic(fmt.Sprintf("set read buffer error: %v", err))
+				}
 			}
 		}
 
@@ -277,6 +284,10 @@ func (q *Queue) extractFlv(protoRp interface{}) error {
 		for i := 0; i < q.FlvWriters.Size(); i++ {
 			val, f := q.FlvWriters.Get(i)
 			if f {
+				if val == nil {
+					q.FlvWriters.Remove(i)
+					continue
+				}
 				writer := val.(*httpflv.FLVWriter)
 				if writer.Closed {
 					writer.Close()
