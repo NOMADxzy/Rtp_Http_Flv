@@ -7,8 +7,8 @@ import (
 	"Rtp_Http_Flv/parser"
 	"Rtp_Http_Flv/protocol/httpflv"
 	"Rtp_Http_Flv/utils"
-	"fmt"
 	"github.com/emirpasic/gods/lists/arraylist"
+
 	"net"
 	"strconv"
 	"strings"
@@ -17,7 +17,7 @@ import (
 var app *cache.App
 
 func main() {
-	if !configure.GetFlag() {
+	if !configure.InitConfig() {
 		return
 	}
 
@@ -50,7 +50,7 @@ func main() {
 func handleNewStream(ssrc uint32) *cache.Queue {
 	//更新流源信息
 	app.Publishers = utils.UpdatePublishers()
-	fmt.Printf("new stream created ssrc=%v\n", ssrc)
+	configure.Log.Infof("new stream created ssrc=%v\n", ssrc)
 
 	//设置key和ssrc的映射，以播放flv
 	key := app.Publishers[ssrc].Key
@@ -62,13 +62,13 @@ func handleNewStream(ssrc uint32) *cache.Queue {
 	flvRecord := cache.NewFlvRecord()
 
 	var flvFile *utils.File
-	if configure.ENABLE_RECORD {
-		fmt.Printf("Create record file path=%v\n", configure.RECORD_DIR+"/"+channel+".flv")
+	if configure.Conf.ENABLE_RECORD {
+		configure.Log.Infof("Create record file path=%v\n", configure.Conf.RECORD_DIR+"/"+channel+".flv")
 		flvFile = utils.CreateFlvFile(channel)
 		app.FlvFiles.Add(flvFile)
 	}
 
-	rtpQueue := cache.NewQueue(ssrc, key, configure.RTP_QUEUE_PADDING_WINDOW_SIZE, flvRecord, flvFile, app)
+	rtpQueue := cache.NewQueue(ssrc, key, configure.Conf.RTP_QUEUE_PADDING_WINDOW_SIZE, flvRecord, flvFile, app)
 	app.RtpQueueMap[ssrc] = rtpQueue
 
 	go rtpQueue.RecvPacket()
@@ -102,7 +102,7 @@ func (myHttpHandler *MyHttpHandler) HandleNewFlvWriterRequest(key string, flvWri
 func (myHttpHandler *MyHttpHandler) HandleDelayRequest(key string) (int64, error) {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Printf("request startTime err, no such key: %s\n", key)
+			configure.Log.Errorf("request startTime err, no such key: %s\n", key)
 		}
 	}()
 	startTime := app.Publishers[app.KeySsrcMap[key]].StartTime
@@ -118,21 +118,21 @@ func receiveRtp() {
 	var addr *net.UDPAddr
 	var conn *net.UDPConn
 
-	isMulticast := strings.IndexByte(configure.UDP_SOCKET_ADDR, '.') > 0
+	isMulticast := strings.IndexByte(configure.Conf.UDP_SOCKET_ADDR, '.') > 0
 
 	if isMulticast { // 组播
-		addr, err = net.ResolveUDPAddr("udp4", configure.UDP_SOCKET_ADDR)
+		addr, err = net.ResolveUDPAddr("udp4", configure.Conf.UDP_SOCKET_ADDR)
 		utils.CheckError(err)
 		conn, err = net.ListenMulticastUDP("udp4", nil, addr)
 		utils.CheckError(err)
-		fmt.Printf("Udp Socket listen On %v\n", configure.UDP_SOCKET_ADDR)
+		configure.Log.Infof("Udp Socket listen On %v\n", configure.Conf.UDP_SOCKET_ADDR)
 
 	} else { // 单播
-		addr, err = net.ResolveUDPAddr("udp4", "0.0.0.0"+configure.UDP_SOCKET_ADDR)
+		addr, err = net.ResolveUDPAddr("udp4", "0.0.0.0"+configure.Conf.UDP_SOCKET_ADDR)
 		utils.CheckError(err)
 		conn, err = net.ListenUDP("udp", addr)
 		utils.CheckError(err)
-		fmt.Printf("Udp Socket listen On 0.0.0.0%v\n", configure.UDP_SOCKET_ADDR)
+		configure.Log.Infof("Udp Socket listen On 0.0.0.0%v\n", configure.Conf.UDP_SOCKET_ADDR)
 	}
 
 	err = conn.SetReadBuffer(app.UdpBufferSize)
@@ -150,20 +150,20 @@ func receiveRtp() {
 		utils.CheckError(err)
 		if firstPkt { // 收到云端的第一个数据包
 			firstPkt = false
-			configure.CLOUD_HOST = addr.IP.String()
-			fmt.Printf("udp connection established, remote IP=%v\n", configure.CLOUD_HOST)
+			configure.Conf.CLOUD_HOST = addr.IP.String()
+			configure.Log.Infof("udp connection established, remote IP=%v\n", configure.Conf.CLOUD_HOST)
 			if buff[0] == '0' && buff[1] == '0' && buff[2] == '0' && buff[3] == '1' { // 标志收到初始化信息
 				QuicPort := uint16(buff[4])<<8 + uint16(buff[5]) // 大端地址
 				ApiPort := uint16(buff[6])<<8 + uint16(buff[7])  // 大端地址
-				fmt.Printf("[logging] initial port message received, quic port=%v, http port=%v\n", QuicPort, ApiPort)
+				configure.Log.Infof("initial port message received, quic port=%v, http port=%v\n", QuicPort, ApiPort)
 
-				configure.QUIC_ADDR = ":" + strconv.Itoa(int(QuicPort)) // 优先级：从云端收到的端口初始化信息>本地configure配置的端口初始化信息
-				configure.API_ADDR = ":" + strconv.Itoa(int(ApiPort))
-				configure.INIT = true
+				configure.Conf.QUIC_ADDR = ":" + strconv.Itoa(int(QuicPort)) // 优先级：从云端收到的端口初始化信息>本地configure配置的端口初始化信息
+				configure.Conf.API_ADDR = ":" + strconv.Itoa(int(ApiPort))
+				configure.Conf.INIT = true
 
 				continue
 			} else {
-				fmt.Printf("[logging] use local port config, quic port=%v, http port=%v\n", configure.QUIC_ADDR, configure.API_ADDR)
+				configure.Log.Warnf("use local port config, quic port=%v, http port=%v\n", configure.Conf.QUIC_ADDR, configure.Conf.API_ADDR)
 			}
 		}
 

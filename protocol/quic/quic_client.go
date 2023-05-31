@@ -5,8 +5,8 @@ import (
 	"Rtp_Http_Flv/container/rtp"
 	"Rtp_Http_Flv/utils"
 	"crypto/tls"
-	"fmt"
 	"github.com/quic-go/quic-go"
+	"github.com/sirupsen/logrus"
 	"sync"
 )
 
@@ -18,7 +18,7 @@ var lock sync.Mutex
 func initQuic() *Conn {
 	tlsConf := &tls.Config{InsecureSkipVerify: true,
 		NextProtos: []string{"quic-echo-server"}}
-	protoconn, err := quic.DialAddr(configure.CLOUD_HOST+configure.QUIC_ADDR, tlsConf, nil)
+	protoconn, err := quic.DialAddr(configure.Conf.CLOUD_HOST+configure.Conf.QUIC_ADDR, tlsConf, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -39,18 +39,20 @@ func CloseQuic() {
 		utils.CheckError(err)
 	}
 	QuicConn = nil
-	fmt.Printf("quic conn closed\n")
+	configure.Log.Infof("quic conn closed\n")
 }
 
 func GetByQuic(ssrc uint32, seq uint16) *rtp.RtpPack {
 	lock.Lock() //防止多条流同时调用重传导致出错
 	defer lock.Unlock()
 
-	if configure.DISABLE_QUIC {
+	if configure.Conf.DISABLE_QUIC {
 		return nil
 	}
 
-	fmt.Printf("[ssrc=%v] packet lost seq = %v, run quic request\n", ssrc, seq)
+	configure.Log.WithFields(logrus.Fields{
+		"seq": seq,
+	}).Debugf("[ssrc=%v] packet lost, run quic request", ssrc)
 	if QuicConn == nil {
 		QuicConn = initQuic()
 	}
@@ -58,7 +60,7 @@ func GetByQuic(ssrc uint32, seq uint16) *rtp.RtpPack {
 	// 根据序列号请求
 	_, err := QuicConn.WriteSsrc(ssrc)
 	if err != nil { //长时间未重传，导致服务关闭
-		fmt.Println(err)
+		configure.Log.Error(err)
 		QuicConn = initQuic()
 		_, err = QuicConn.WriteSsrc(ssrc)
 	}
@@ -70,13 +72,15 @@ func GetByQuic(ssrc uint32, seq uint16) *rtp.RtpPack {
 	err = QuicConn.ReadRtp(&pkt)
 	if err != nil {
 		//没有该包的缓存
-		fmt.Printf("[ssrc=%v]quic err, get packet failed, seq=%v\n", ssrc, seq)
+		configure.Log.Errorf("[ssrc=%v]quic err, get packet failed, seq=%v\n", ssrc, seq)
 		return nil
 	}
 	if pkt == nil {
-		fmt.Printf("[ssrc=%v]quic err，received a nil packet, seq=%v\n", ssrc, seq)
+		configure.Log.Errorf("[ssrc=%v]quic err，received a nil packet, seq=%v\n", ssrc, seq)
 	} else {
-		fmt.Printf("quic received rtp packet，Seq:\t %v \n", pkt.SequenceNumber)
+		configure.Log.WithFields(logrus.Fields{
+			"seq": pkt.SequenceNumber,
+		}).Debugf("quic received rtp packet")
 		return pkt
 	}
 	return nil

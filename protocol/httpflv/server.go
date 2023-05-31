@@ -4,8 +4,6 @@ import (
 	"Rtp_Http_Flv/configure"
 	"Rtp_Http_Flv/utils"
 	"encoding/json"
-	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -59,9 +57,9 @@ func (server *Server) Serve(l net.Listener, certFile string, keyFile string) err
 	})
 
 	if certFile == "" || keyFile == "" {
-		log.Fatal(http.Serve(l, mux))
+		configure.Log.Fatal(http.Serve(l, mux))
 	} else {
-		log.Fatal(http.ServeTLS(l, mux, certFile, keyFile))
+		configure.Log.Fatal(http.ServeTLS(l, mux, certFile, keyFile))
 	}
 	return nil
 }
@@ -85,7 +83,7 @@ func (server *Server) handleTime(w http.ResponseWriter, path string) {
 func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Println("http flv handleConn panic: ", r)
+			configure.Log.Error("http flv handleConn panic: ", r)
 		}
 	}()
 
@@ -97,9 +95,9 @@ func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.TrimSuffix(strings.TrimLeft(u, "/"), ".flv")
 	paths := strings.SplitN(path, "/", 2)
-	log.Println("url:", u, "path:", path, "paths:", paths)
+	configure.Log.Info("url:", u, "path:", path, "paths:", paths)
 	if !server.httpHandler.HasChannel(path) {
-		fmt.Printf("[path=%v]flv source do not exist\n", path)
+		configure.Log.Errorf("[path=%v]flv source do not exist\n", path)
 		return
 	}
 
@@ -116,26 +114,26 @@ func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
 	writer.Wait()
 }
 func StartHTTPFlv(handler HttpHandler) *Server {
-	flvListen, err := net.Listen("tcp", configure.HTTP_FLV_ADDR)
+	flvListen, err := net.Listen("tcp", configure.Conf.HTTP_FLV_ADDR)
 	if err != nil {
-		log.Fatal(err)
+		configure.Log.Fatal(err)
 	}
 
 	hdlServer := NewServer(handler)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Println("HTTP-FLV server panic: ", r)
+				configure.Log.Error("HTTP-FLV server panic: ", r)
 			}
 		}()
-		log.Println("HTTP-FLV listen On", configure.HTTP_FLV_ADDR)
+		configure.Log.Info("HTTP-FLV listen On", configure.Conf.HTTP_FLV_ADDR)
 		//判断文件存在
-		if !utils.PathExists(configure.KEY_FILE) || !utils.PathExists(configure.CERT_FILE) {
-			configure.KEY_FILE = ""
-			configure.CERT_FILE = ""
+		if !utils.PathExists(configure.Conf.KEY_FILE) || !utils.PathExists(configure.Conf.CERT_FILE) {
+			configure.Conf.KEY_FILE = ""
+			configure.Conf.CERT_FILE = ""
 		}
 
-		err := hdlServer.Serve(flvListen, configure.CERT_FILE, configure.KEY_FILE)
+		err := hdlServer.Serve(flvListen, configure.Conf.CERT_FILE, configure.Conf.KEY_FILE)
 		utils.CheckError(err)
 	}()
 	return hdlServer

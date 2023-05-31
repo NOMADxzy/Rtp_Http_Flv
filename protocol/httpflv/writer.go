@@ -1,11 +1,11 @@
 package httpflv
 
 import (
+	"Rtp_Http_Flv/configure"
 	"Rtp_Http_Flv/container/flv"
 	"Rtp_Http_Flv/utils"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 )
 
@@ -44,7 +44,7 @@ func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
 
 		err := ret.SendPacket()
 		if err != nil {
-			log.Println("SendPacket error:", err)
+			configure.Log.Error("SendPacket error:", err)
 			ret.Closed = true
 		}
 	}()
@@ -140,7 +140,7 @@ func (flvWriter *FLVWriter) Wait() {
 }
 
 func (flvWriter *FLVWriter) Close() {
-	log.Println("http flv closed")
+	configure.Log.Infof("http flv closed")
 	if !flvWriter.Closed {
 		close(flvWriter.packetQueue)
 		close(flvWriter.closedChan)

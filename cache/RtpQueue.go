@@ -50,7 +50,7 @@ type Queue struct {
 
 func NewQueue(ssrc uint32, key string, wz int, record *FlvRecord, flvFile *utils.File, app *App) *Queue {
 	var hlsWriter *hls.Source
-	if configure.ENABLE_HLS { //选择是否开启hls服务
+	if configure.Conf.ENABLE_HLS { //选择是否开启hls服务
 		hlsWriter = hls.GetWriter(key)
 	}
 	return &Queue{
@@ -60,8 +60,8 @@ func NewQueue(ssrc uint32, key string, wz int, record *FlvRecord, flvFile *utils
 		ChannelKey:        key,
 		flvRecord:         record,
 		flvFile:           flvFile,
-		outChan:           make(chan interface{}, configure.RTP_QUEUE_CHAN_SIZE),
-		InChan:            make(chan interface{}, configure.RTP_QUEUE_CHAN_SIZE),
+		outChan:           make(chan interface{}, configure.Conf.RTP_QUEUE_CHAN_SIZE),
+		InChan:            make(chan interface{}, configure.Conf.RTP_QUEUE_CHAN_SIZE),
 		FlvWriters:        arraylist.New(),
 		hlsWriter:         hlsWriter,
 		cache:             NewCache(),
@@ -103,10 +103,10 @@ func (q *Queue) PrintInfo() {
 
 		if val, ok := q.queue.Get(q.queue.Size() - 1); ok {
 			lastSeq := val.(*rtp.RtpPack).SequenceNumber
-			fmt.Printf("[ssrc=%d]current rtpQueue length: %d, FirstSeq: %d, LastSeq: %d, accRtpRecv: %d, accFlvRecv: %d\n",
+			configure.Log.Debugf("[ssrc=%d]current rtpQueue length: %d, FirstSeq: %d, LastSeq: %d, accRtpRecv: %d, accFlvRecv: %d",
 				q.Ssrc, q.queue.Size(), q.FirstSeq, lastSeq, q.accPackets, q.accFlvTags)
 		} else {
-			fmt.Printf("[ssrc=%d]current rtpQueue length: %d, FirstSeq: %d, LastSeq: nil, accRtpRecv: %d, accFlvRecv: %d\n",
+			configure.Log.Debugf("[ssrc=%d]current rtpQueue length: %d, FirstSeq: %d, LastSeq: nil, accRtpRecv: %d, accFlvRecv: %d",
 				q.Ssrc, q.queue.Size(), q.FirstSeq, q.accPackets, q.accFlvTags)
 			if q.queue.Size() > 0 {
 				panic("rtpQueue params error")
@@ -143,7 +143,7 @@ func (q *Queue) Enqueue(rp *rtp.RtpPack) {
 	} else {
 		var relative int
 		if utils.FirstBeforeSecond(seq, q.FirstSeq) {
-			fmt.Printf("[%v]useless packet seq: %v, firstSeq: %v\n", q.Ssrc, seq, q.FirstSeq)
+			configure.Log.Errorf("[%v]useless packet seq: %v, firstSeq: %v\n", q.Ssrc, seq, q.FirstSeq)
 			return
 		} else {
 			if seq > q.FirstSeq {
@@ -182,7 +182,7 @@ func (q *Queue) runQuic(seq uint16) {
 				if err != nil {
 					defer func() {
 						if x := recover(); x != nil {
-							fmt.Printf("runtime error: %v\n", x)
+							configure.Log.Errorf("runtime error: %v\n", x)
 						}
 					}()
 					panic(fmt.Sprintf("set read buffer error: %v", err))
@@ -190,7 +190,7 @@ func (q *Queue) runQuic(seq uint16) {
 			}
 		}
 
-		fmt.Printf("[warning] Continuous packet loss, reshaping queue, %d packets removed, change udp buffer size to %vKB\n", moved, q.App.UdpBufferSize/1024)
+		configure.Log.Errorf("[warning] Continuous packet loss, reshaping queue, %d packets removed, change udp buffer size to %vKB\n", moved, q.App.UdpBufferSize/1024)
 		if moved > 0 {
 			q.flvRecord.Reset()
 			q.flvRecord.jumpToNextHead = true
@@ -256,6 +256,11 @@ func (q *Queue) extractFlv(protoRp interface{}) error {
 			copy(record.flvTag[record.pos:record.pos+len(payload)], payload)
 			record.pos += len(payload)
 		} else { //该帧是中间帧
+			if record.pos+len(payload) > record.TagSize { //越界
+				record.Reset()               //清空当前tag的缓存
+				record.jumpToNextHead = true //跳到下一个tag头开始解析
+				return nil
+			}
 			copy(record.flvTag[record.pos:record.pos+len(payload)], payload)
 			record.pos += len(payload)
 		}
@@ -265,6 +270,11 @@ func (q *Queue) extractFlv(protoRp interface{}) error {
 		} else { //有前面的分片
 			//fmt.Println("pos===", pos)
 			//fmt.Println(len(payload))
+			if record.pos+len(payload) > record.TagSize { //越界
+				record.Reset()               //清空当前tag的缓存
+				record.jumpToNextHead = true //跳到下一个tag头开始解析
+				return nil
+			}
 			copy(record.flvTag[record.pos:record.pos+len(payload)], payload)
 		}
 		q.accFlvTags += 1
@@ -334,7 +344,7 @@ func (q *Queue) getDelay() {
 	if q.startTime == 0 { //还没有从云端获取到初始时间
 		utils.UpdatePublishers()
 		q.startTime = q.App.Publishers[q.Ssrc].StartTime
-		fmt.Printf("[ssrc=%v]get stream startTime from cloudserver, startTime=%v\n", q.Ssrc, q.startTime)
+		configure.Log.Infof("[ssrc=%v]get stream startTime from cloudserver, startTime=%v\n", q.Ssrc, q.startTime)
 		return
 	} else {
 		now := time.Now().UnixMilli()
@@ -342,7 +352,7 @@ func (q *Queue) getDelay() {
 			return
 		} else {
 			q.delay = delay
-			fmt.Printf("[ssrc=%v]时延：%vms\n", q.Ssrc, q.delay)
+			configure.Log.Tracef("[ssrc=%v]时延：%vms", q.Ssrc, q.delay)
 		}
 	}
 }
@@ -379,17 +389,17 @@ func (q *Queue) reshape() int {
 }
 
 func (q *Queue) print() {
-	fmt.Println("rtp队列长度：", q.queue.Size())
-	fmt.Print("rtp队列：")
+	configure.Log.Info("rtp队列长度：", q.queue.Size())
+	configure.Log.Info("rtp队列：")
 	for i := 0; i < q.queue.Size(); i++ {
 		rp, _ := q.queue.Get(i)
 		if rp == nil {
-			fmt.Print(" nil")
+			configure.Log.Infof(" nil")
 		} else {
-			fmt.Print(rp.(*rtp.RtpPack).SequenceNumber, " ")
+			configure.Log.Info(rp.(*rtp.RtpPack).SequenceNumber, " ")
 		}
 	}
-	fmt.Println()
+	configure.Log.Infof("\n")
 
 }
 
@@ -397,7 +407,7 @@ func (q *Queue) Close() {
 	if q.flvFile != nil {
 		q.flvFile.Close()
 	}
-	fmt.Printf("stream closed ssrc=%v\n", q.Ssrc)
+	configure.Log.Infof("stream closed ssrc=%v\n", q.Ssrc)
 	q.Ssrc = 0 // 表示流已关闭，用于别处判断
 	runtime.GC()
 }

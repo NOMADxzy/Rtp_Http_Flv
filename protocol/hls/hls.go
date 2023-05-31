@@ -170,7 +170,7 @@ func (server *Server) parseTs(pathstr string) (key string, err error) {
 }
 
 func StartHls() *Server {
-	hlsListen, err := net.Listen("tcp", configure.HLS_ADDR)
+	hlsListen, err := net.Listen("tcp", configure.Conf.HLS_ADDR)
 	utils.CheckError(err)
 
 	hlsServer = NewServer()
@@ -180,7 +180,7 @@ func StartHls() *Server {
 				log.Error("HLS server panic: ", r)
 			}
 		}()
-		log.Info("HLS listen On ", configure.HLS_ADDR)
+		log.Info("HLS listen On ", configure.Conf.HLS_ADDR)
 		hlsServer.Serve(hlsListen)
 	}()
 	return hlsServer

@@ -21,7 +21,7 @@ type App struct { //边缘节点实体
 func (app *App) CheckAlive() {
 	for {
 		<-time.After(5 * time.Second) //
-		if !configure.INIT {          // 还没收到初始信息，没有流
+		if !configure.Conf.INIT {     // 还没收到初始信息，没有流
 			continue
 		}
 		app.Publishers = utils.UpdatePublishers()

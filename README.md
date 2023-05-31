@@ -33,7 +33,7 @@
 ## 使用
 
 #### 1. 启动边缘节点，监听本地端口，准备接收云端节点发过来的rtp流，并转为http-flv服务
-`./edgeserver [-udp_addr :5222] [-pack_loss 0.002]`
+`./edgeserver [-udp_addr :5222]`
 
 #### 2. 启动[云端节点](https://github.com/NOMADxzy/Rtmp_Rtp_Flv)，监听rtmp`1935`端口;
 `./cloudserver`
@@ -51,20 +51,24 @@
 
 ```bash
 ./Rtp_Http_Flv -h
-Usage of ./Rtp_Http_Flv:
-  -api_addr string      云端节点http服务的地址(":8090")
-  -udp_addr string      监听udp的端口(":5222")#单播
-                                   ("239.0.0.1:5222")#组播
-  -quic_addr string     云端节点quic服务的地址(":4242")
-  -httpflv_addr string  提供httpflv服务的地址(":7001")
-  -disable_quic bool    是否停用quic重传(false)
-  -padding_size int     rtp队列的缓冲长度(300)
-  -queue_chan_size int  流的写入写出缓冲长度(100)
-  -record_dir string    录制文件的存放目录("./record")
-  -pack_loss float64    模拟丢包率(0.002)
-  -enable_hls bool      开启hls服务(true)
-  -hls_addr   string    hls服务地址(":7002")
-  -enable_record bool   启动直播录制(false )
+Usage of ./main:
+  -api_addr         string            云端节点http服务的地址(":8090")
+  -udp_addr         string            监听udp的端口(":5222")#单播
+                                         ("239.0.0.1:5222")#组播
+  -quic_addr        string            云端节点quic服务的地址(":4242")
+  -httpflv_addr     string            提供httpflv服务的地址(":7001")
+  -disable_quic     bool              是否停用quic重传(false)
+  -padding_size     int               rtp队列的缓冲长度(300)
+  -queue_chan_size  int               流的写入写出缓冲长度(100)
+  -record_dir       string            录制文件的存放目录("./record")
+  -pack_loss        float64           模拟丢包率(0.002)
+  -enable_hls       bool              开启hls服务(true)
+  -hls_addr         string            hls服务地址(":7002")
+  -enable_record    bool              启动直播录制(false )
+  -cert_file:       certs/server.crt  https证书
+  -key_file:        certs/server.key  https公钥
+  -log_level:       ""                日志等级
+  -enable_log_file: false             启用日志文件
 ```
 
 

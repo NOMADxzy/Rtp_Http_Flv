@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"github.com/quic-go/quic-go"
 )
 
@@ -20,9 +19,7 @@ type Conn struct {
 
 func newConn(sess quic.Connection, is_server bool) (*Conn, error) {
 	quicStream, err := sess.OpenStream()
-	if is_server {
-		fmt.Print("This is quic server launched by cloudServer.\n")
-	}
+
 	if err != nil {
 		return nil, err
 	}

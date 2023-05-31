@@ -4,7 +4,6 @@ import (
 	"Rtp_Http_Flv/configure"
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
@@ -18,7 +17,7 @@ func Get(url string) map[string]interface{} {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
-		fmt.Println(err)
+		configure.Log.Error(err)
 		return nil
 	}
 	defer func(Body io.ReadCloser) {
@@ -61,7 +60,7 @@ type Publisher struct {
 func UpdatePublishers() map[uint32]*Publisher {
 	newPublishers := make(map[uint32]*Publisher) //清空map
 
-	res := Get("http://" + configure.CLOUD_HOST + configure.API_ADDR + "/stat/livestat")
+	res := Get("http://" + configure.Conf.CLOUD_HOST + configure.Conf.API_ADDR + "/stat/livestat")
 	if res == nil {
 		return nil
 	}
@@ -85,9 +84,9 @@ func UpdatePublishers() map[uint32]*Publisher {
 	return newPublishers
 }
 func CreateFlvFile(name string) *File {
-	flvFile, err := CreateFile(configure.RECORD_DIR + "/" + name + ".flv")
+	flvFile, err := CreateFile(configure.Conf.RECORD_DIR + "/" + name + ".flv")
 	if err != nil {
-		fmt.Println("Create FLV dump file error:", err)
+		configure.Log.Error("Create FLV dump file error:", err)
 		return nil
 	}
 	return flvFile
@@ -110,7 +109,7 @@ func IsTagHead(payload []byte) bool {
 
 func IsPacketLoss() bool {
 	r := rand.Intn(10000)
-	if float64(r)/10000.0 >= configure.PACKET_LOSS_RATE {
+	if float64(r)/10000.0 >= configure.Conf.PACKET_LOSS_RATE {
 		return false
 	} else {
 		return true
