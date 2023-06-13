@@ -34,6 +34,7 @@ type Config struct {
 	LOG_LEVEL                     string  `yaml:"log_level"`
 	ENABLE_LOG_FILE               bool    `yaml:"enable_log_file"`
 	CLOUD_HOST                    string  `yaml:"cloud_host"`
+	PROTECT                       bool    `yaml:"protect"`
 }
 
 var Conf = &Config{
@@ -55,7 +56,8 @@ var Conf = &Config{
 	false, //保留值，不得手动设置
 	"",
 	false,
-	"", //保留值
+	"",   //保留值
+	true, //保护模式，出现大面积连续丢包时会放弃重传这些包，跳到下个有效包
 }
 
 func init() {
@@ -77,6 +79,7 @@ func init() {
 	flag.StringVar(&Conf.KEY_FILE, "key_file", Conf.KEY_FILE, "https server key")
 	flag.StringVar(&Conf.LOG_LEVEL, "log_level", Conf.LOG_LEVEL, "log level")
 	flag.BoolVar(&Conf.ENABLE_LOG_FILE, "enable_log_file", Conf.ENABLE_LOG_FILE, "enable log to file")
+	flag.BoolVar(&Conf.PROTECT, "protect", Conf.PROTECT, "enable protect mode")
 
 	flag.Usage = usage
 }

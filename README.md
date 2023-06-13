@@ -33,10 +33,10 @@
 ## 使用
 
 #### 1. 启动边缘节点，监听本地端口，准备接收云端节点发过来的rtp流，并转为http-flv服务
-`./edgeserver [-udp_addr :5222]`
+`./edge`
 
 #### 2. 启动[云端节点](https://github.com/NOMADxzy/Rtmp_Rtp_Flv)，监听rtmp`1935`端口;
-`./cloudserver`
+`./cloud`
 
 #### 3. 使用`ffmpeg`等工具推流到云端节点，命令: <br>`ffmpeg -re -stream_loop -1 -i skiing.mp4  -vcodec libx264 -acodec aac -f flv  rtmp://127.0.0.1:1935/live/movie`
 
@@ -52,10 +52,8 @@
 ```bash
 ./Rtp_Http_Flv -h
 Usage of ./main:
-  -api_addr         string            云端节点http服务的地址(":8090")
   -udp_addr         string            监听udp的端口(":5222")#单播
                                          ("239.0.0.1:5222")#组播
-  -quic_addr        string            云端节点quic服务的地址(":4242")
   -httpflv_addr     string            提供httpflv服务的地址(":7001")
   -disable_quic     bool              是否停用quic重传(false)
   -padding_size     int               rtp队列的缓冲长度(300)
@@ -69,6 +67,7 @@ Usage of ./main:
   -key_file:        certs/server.key  https公钥
   -log_level:       ""                日志等级
   -enable_log_file: false             启用日志文件
+  -protect:         true              保护模式
 ```
 
 

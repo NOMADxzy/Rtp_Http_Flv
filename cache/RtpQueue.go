@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/NOMADxzy/livego/av"
 	"github.com/emirpasic/gods/lists/arraylist"
+	"github.com/sirupsen/logrus"
 	"runtime"
 	"sync"
 	"time"
@@ -78,12 +79,12 @@ func (q *Queue) RecvPacket() {
 			//if q.accPackets == q.PaddingWindowSize {
 			//	q.Check()
 			//}
-			for q.queue.Size() > q.PaddingWindowSize { //窗口外的必取，包括不存在的
+			for q.queue.Size() > q.PaddingWindowSize { //重传区的必取，包括不存在的
 				protoRp := q.Dequeue()
 				_ = q.extractFlv(protoRp)
 			}
 			for {
-				if q.isFirstOk() && q.queue.Size() > 1 { //窗口内的一直取到空包位置处为止,//最少保留一个包在队列中，否则入队列时无法计算相对位置
+				if q.isFirstOk() && q.queue.Size() > 1 { //等待区取到空包位置处为止,//最少保留一个包在队列中，否则入队列时无法计算相对位置
 					protoRp := q.Dequeue()
 					_ = q.extractFlv(protoRp)
 				} else {
@@ -101,17 +102,22 @@ func (q *Queue) PrintInfo() {
 			return
 		}
 
+		lastSeq := uint16(0)
 		if val, ok := q.queue.Get(q.queue.Size() - 1); ok {
-			lastSeq := val.(*rtp.RtpPack).SequenceNumber
-			configure.Log.Debugf("[ssrc=%d]current rtpQueue length: %d, FirstSeq: %d, LastSeq: %d, accRtpRecv: %d, accFlvRecv: %d",
-				q.Ssrc, q.queue.Size(), q.FirstSeq, lastSeq, q.accPackets, q.accFlvTags)
+			lastSeq = val.(*rtp.RtpPack).SequenceNumber
 		} else {
-			configure.Log.Debugf("[ssrc=%d]current rtpQueue length: %d, FirstSeq: %d, LastSeq: nil, accRtpRecv: %d, accFlvRecv: %d",
-				q.Ssrc, q.queue.Size(), q.FirstSeq, q.accPackets, q.accFlvTags)
 			if q.queue.Size() > 0 {
 				panic("rtpQueue params error")
 			}
 		}
+		configure.Log.WithFields(logrus.Fields{
+			"length":     q.queue.Size(),
+			"FirstSeq":   q.FirstSeq,
+			"LastSeq":    lastSeq,
+			"accRtpRecv": q.accPackets,
+			"accFlvRecv": q.accFlvTags,
+		}).Debugf("[ssrc=%d]current rtpQueue",
+			q.Ssrc)
 	}
 }
 
@@ -143,7 +149,7 @@ func (q *Queue) Enqueue(rp *rtp.RtpPack) {
 	} else {
 		var relative int
 		if utils.FirstBeforeSecond(seq, q.FirstSeq) {
-			configure.Log.Errorf("[%v]useless packet seq: %v, firstSeq: %v\n", q.Ssrc, seq, q.FirstSeq)
+			configure.Log.Errorf("[%v]useless packet seq: %v, firstSeq: %v", q.Ssrc, seq, q.FirstSeq)
 			return
 		} else {
 			if seq > q.FirstSeq {
@@ -170,10 +176,11 @@ func (q *Queue) Enqueue(rp *rtp.RtpPack) {
 func (q *Queue) runQuic(seq uint16) {
 	q.accLoss += 1
 
-	if seq == q.previousLostSeq+uint16(1) { //出现连续丢包
-		moved := q.reshape()
+	if seq == q.previousLostSeq+uint16(1) && configure.Conf.PROTECT { //出现连续丢包
+		nils := q.getHeadNil()
 
-		if moved > 5 {
+		if nils > 5 {
+			q.reshape() //删除开头的所有nil，防止堵塞
 			q.App.UdpBufferSize *= 2
 			if q.App.UdpBufferSize > configure.MAX_UDP_CACHE_SIZE {
 				q.App.UdpBufferSize /= 2
@@ -182,19 +189,17 @@ func (q *Queue) runQuic(seq uint16) {
 				if err != nil {
 					defer func() {
 						if x := recover(); x != nil {
-							configure.Log.Errorf("runtime error: %v\n", x)
+							configure.Log.Errorf("runtime error: %v", x)
 						}
 					}()
 					panic(fmt.Sprintf("set read buffer error: %v", err))
 				}
 			}
-		}
-
-		configure.Log.Errorf("[warning] Continuous packet loss, reshaping queue, %d packets removed, change udp buffer size to %vKB\n", moved, q.App.UdpBufferSize/1024)
-		if moved > 0 {
 			q.flvRecord.Reset()
 			q.flvRecord.jumpToNextHead = true
+			configure.Log.Errorf("[warning] Continuous packet loss, reshaping queue, %d packets removed, change udp buffer size to %vKB", nils, q.App.UdpBufferSize/1024)
 		}
+
 	}
 	pkt := quic.GetByQuic(q.Ssrc, seq)
 
@@ -344,7 +349,7 @@ func (q *Queue) getDelay() {
 	if q.startTime == 0 { //还没有从云端获取到初始时间
 		utils.UpdatePublishers()
 		q.startTime = q.App.Publishers[q.Ssrc].StartTime
-		configure.Log.Infof("[ssrc=%v]get stream startTime from cloudserver, startTime=%v\n", q.Ssrc, q.startTime)
+		configure.Log.Infof("[ssrc=%v]get stream startTime from cloudserver, startTime=%v", q.Ssrc, q.startTime)
 		return
 	} else {
 		now := time.Now().UnixMilli()
@@ -364,6 +369,23 @@ func (q *Queue) isFirstOk() bool {
 		}
 	}
 	return false
+}
+
+func (q *Queue) getHeadNil() int {
+	q.m.Lock()
+	defer q.m.Unlock()
+	nils := 1
+	for {
+		if val, ok := q.queue.Get(nils); ok {
+			if val == nil {
+				nils += 1
+			} else {
+				return nils
+			}
+		} else {
+			return nils
+		}
+	}
 }
 
 func (q *Queue) reshape() int {
@@ -407,7 +429,7 @@ func (q *Queue) Close() {
 	if q.flvFile != nil {
 		q.flvFile.Close()
 	}
-	configure.Log.Infof("stream closed ssrc=%v\n", q.Ssrc)
+	configure.Log.Infof("stream closed ssrc=%v", q.Ssrc)
 	q.Ssrc = 0 // 表示流已关闭，用于别处判断
 	runtime.GC()
 }

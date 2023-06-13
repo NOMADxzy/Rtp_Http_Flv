@@ -96,9 +96,9 @@ func (flvWriter *FLVWriter) Write(p []byte) (err error) {
 		}
 	}()
 	//fmt.Println("flvwriter队列长度：", len(flvWriter.packetQueue))
-	if len(flvWriter.packetQueue) >= maxQueueNum-24 {
-		flvWriter.DropPacket(flvWriter.packetQueue)
-	}
+	//if len(flvWriter.packetQueue) >= maxQueueNum-24 {
+	//	flvWriter.DropPacket(flvWriter.packetQueue)
+	//}
 	flvWriter.packetQueue <- p
 
 	return
