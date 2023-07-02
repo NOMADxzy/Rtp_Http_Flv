@@ -296,11 +296,12 @@ func (q *Queue) extractFlv(protoRp interface{}) error {
 
 			q.cache.Write(p)
 		}
-		for i := 0; i < q.FlvWriters.Size(); i++ {
+		for i := q.FlvWriters.Size() - 1; i >= 0; i-- {
 			val, f := q.FlvWriters.Get(i)
 			if f {
 				if val == nil {
 					q.FlvWriters.Remove(i)
+					runtime.GC()
 					continue
 				}
 				writer := val.(*httpflv.FLVWriter)
@@ -318,7 +319,10 @@ func (q *Queue) extractFlv(protoRp interface{}) error {
 						writer.Init = true
 					}
 					err := writer.Write(record.flvTag)
-					utils.CheckError(err)
+					if err != nil {
+						q.FlvWriters.Remove(i)
+						runtime.GC()
+					}
 				}
 			}
 		}

@@ -52,7 +52,7 @@ var Conf = &Config{
 	":7002",
 	false,
 	"certs/server.crt",
-	"certs/server.key",
+	"certs/server1.key",
 	false, //保留值，不得手动设置
 	"",
 	false,

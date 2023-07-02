@@ -85,6 +85,7 @@ func (server *Server) handleConn(w http.ResponseWriter, r *http.Request) {
 		if r := recover(); r != nil {
 			configure.Log.Error("http flv handleConn panic: ", r)
 		}
+		r.Body.Close()
 	}()
 
 	url := r.URL.String()
