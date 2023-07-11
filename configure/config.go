@@ -94,7 +94,7 @@ func usage() {
 }
 
 func InitConfig() bool { // 优先级 flag命令行 > config.yaml配置文件 > default默认配置
-	Conf.readFromXml("./Config.yaml")
+	Conf.readFromXml("./conf.yaml")
 
 	flag.Parse() //获取参数
 	if Conf.h {  //打印帮助

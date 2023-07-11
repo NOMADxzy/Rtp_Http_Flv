@@ -18,6 +18,14 @@
 
 #### 使用预编译的可执行文件
 [Releases](https://github.com/NOMADxzy/Rtp_Http_Flv/releases)
+#### 使用 Dockerfile
+由于端口映射原因，docker容器中识别云端ip会变成内部ip，故需要先将云端(本机)ip写入conf.yaml
+```text
+cloud_host: "10.28.237.194"
+```
+生成镜像 `docker build -t edge -f ./Dockerfile ./`
+运行容器 `docker run --name edge -dit -p 7001:7001 -p 5222:5222 18030100013/edge`  
+
 #### 从源码编译
 1. 下载源码`https://github.com/NOMADxzy/Rtp_Http_Flv.git`
 2. 去 Rtp_Http_Flv 目录中 执行 `go build -o edgeserver.exe`

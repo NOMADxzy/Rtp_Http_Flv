@@ -151,11 +151,19 @@ func receiveRtp() {
 		utils.CheckError(err)
 		if firstPkt { // 收到云端的第一个数据包
 			firstPkt = false
-			configure.Conf.CLOUD_HOST = addr.IP.String()
-			configure.Log.WithFields(logrus.Fields{
-				"remote IP": configure.Conf.CLOUD_HOST,
-			}).Infof("udp connection established")
-			if buff[0] == '0' && buff[1] == '0' && buff[2] == '0' && buff[3] == '1' { // 标志收到初始化信息
+
+			if configure.Conf.CLOUD_HOST == "" {
+				configure.Conf.CLOUD_HOST = addr.IP.String()
+				configure.Log.WithFields(logrus.Fields{
+					"remote IP": configure.Conf.CLOUD_HOST,
+				}).Infof("udp connection established")
+			} else {
+				configure.Log.WithFields(logrus.Fields{
+					"remote IP": configure.Conf.CLOUD_HOST,
+				}).Infof("use remote ip form conf.yaml")
+			}
+
+			if buff[0] == '0' && buff[1] == '0' && buff[2] == '0' && buff[3] == '1' && len(buff) == 8 { // 标志收到初始化信息
 				QuicPort := uint16(buff[4])<<8 + uint16(buff[5]) // 大端地址
 				ApiPort := uint16(buff[6])<<8 + uint16(buff[7])  // 大端地址
 				configure.Log.WithFields(logrus.Fields{
