@@ -2,31 +2,42 @@
 
 ![system.png](https://s2.loli.net/2022/10/04/q2GfX9DdxPhsACH.png)
 
+![go](https://img.shields.io/badge/go-18.0+-blue.svg?style=plastic)
+<img alt="Tests Passing" src="https://github.com/anuraghazra/github-readme-stats/workflows/Test/badge.svg" />
+![platform](https://img.shields.io/badge/win/mac/linux-satisfied-655BE1.svg?style=plastic)
+![go](https://img.shields.io/badge/dockerfile-provided-655BE1.svg?style=plastic)
+
+
 ## 功能
 - 接收rtp流`组播/单播`，解析得到flv内容队列
 - 通过特定方式组织收到的rtp数据包，保证有序，发生丢包时通过`QUIC`协议重传rtp包
-- 对收到的不同流，通过channel区分，通过`httpflv`服务向客户端提供不同channel的直播/点播
+- 对收到的不同流，通过channel区分，通过`httpflv`等服务向客户端提供不同channel的直播/点播
 
-### 传输协议
+### 相关协议
 - [RTMP](https://github.com/melpon/rfc/blob/master/rtmp.md)
 - [RTP](https://www.rfc-editor.org/rfc/rfc3550.html)
 - [QUIC](https://datatracker.ietf.org/doc/html/rfc9000)
 - [HTTP-FLV](https://ossrs.io/lts/en-us/docs/v4/doc/delivery-http-flv)
 - [HLS](https://www.rfc-editor.org/rfc/pdfrfc/rfc8216.txt.pdf)
 
+### 主要配置
+在`conf.yaml`中指定要监听的udp端口号: `-udp_addr`    
+*:5222*表示监听单播地址`127.0.0.1:5222`    
+*239.0.0.1:5222*表示监听单播地址`"239.0.0.1:5222"`
+
 ## 安装
 
-#### 使用预编译的可执行文件
+#### Choice1 - 使用预编译的可执行文件
 [Releases](https://github.com/NOMADxzy/Rtp_Http_Flv/releases)
-#### 使用 Dockerfile
-由于端口映射原因，docker容器中识别云端ip会变成内部ip，故需要先将云端(本机)ip写入conf.yaml
+#### Choice2 - 使用 Dockerfile
+由于docker容器的隔离机制，需要先将云端(本机)ip写入conf.yaml
 ```text
 cloud_host: "10.28.237.194"
 ```
 生成镜像 `docker build -t edge -f ./Dockerfile ./`
-运行容器 `docker run --name edge -dit -p 7001:7001 -p 5222:5222 18030100013/edge`  
+运行容器 `docker run --name edge -dit -p 7001:7001 -p 0.0.0.0:5222:5222/udp edge`  
 
-#### 从源码编译
+### Choice3 - 从源码编译
 1. 下载源码`https://github.com/NOMADxzy/Rtp_Http_Flv.git`
 2. 去 Rtp_Http_Flv 目录中 执行 `go build -o edgeserver.exe`
 
@@ -55,7 +66,7 @@ cloud_host: "10.28.237.194"
 
 
 
-### 主要参数配置
+### 详细参数配置
 
 ```bash
 ./Rtp_Http_Flv -h

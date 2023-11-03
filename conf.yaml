@@ -1,0 +1,20 @@
+udp_addr: 239.0.0.1:5222 #通常只需改此项（:5222表示单播地址，239.0.0.1:5222表示组播地址）
+api_addr: :8090
+quic_addr: :4242
+padding_size: 100
+disable_quic: false
+chan_size: 100
+record_dir: ./record
+pack_loss: 0.001
+flv_addr: :7001
+enable_hls: false
+hls_addr: :7002
+enable_record: false
+cert_file: certs/server.crt
+key_file: certs/server.key
+init: false
+log_level: ""
+enable_log_file: false
+cloud_host: ""
+protect: true #保护模式，防止边缘处理包速度慢导致崩溃
+

@@ -9,7 +9,7 @@ MAINTAINER zuyunxu@bupt.edu.cn
 #镜像操作命令
 WORKDIR /home/app
 
-RUN apt update && apt install git
+RUN apt update && apt install -y git vim
 
 # pre-copy/cache go.mod for pre-downloading dependencies and only redownloading them in subsequent builds if they change
 COPY go.mod go.sum ./
